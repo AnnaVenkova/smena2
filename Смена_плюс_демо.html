@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Смена+ — обучение с геймификацией</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #16181D;
+  --surface: #1F232B;
+  --surface-2: #262B35;
+  --border: #333947;
+  --text: #F2EFEA;
+  --text-dim: #9AA0AC;
+  --accent: #FF6B35;
+  --accent-2: #F2B705;
+  --success: #1FB6A6;
+  --danger: #E5484D;
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+h1, h2, .display {
+  font-family: 'Oswald', 'Inter', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+#viewport {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--bg);
+}
+
+#app {
+  flex: 1;
+  padding: 16px 20px 100px;
+  overflow-y: auto;
+}
+
+/* ===== Top stats bar ===== */
+.topstats {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  margin-bottom: 18px;
+}
+.lvl-badge {
+  font-family: 'Oswald', sans-serif;
+  background: var(--accent);
+  color: #16181D;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.xp-bar { flex: 1; height: 6px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.xp-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 4px; transition: width .4s; }
+.xp-num { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.streak { font-size: 13px; white-space: nowrap; }
+
+/* ===== Headers ===== */
+.screen-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.screen-header h1 { font-size: 22px; margin: 0; flex: 1; }
+.back-btn {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  width: 36px; height: 36px; border-radius: 50%; font-size: 20px; cursor: pointer; flex-shrink:0;
+}
+
+/* ===== Course list ===== */
+.course-list { display: flex; flex-direction: column; gap: 12px; }
+.course-card {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; cursor: pointer; position: relative; overflow: hidden;
+}
+.course-card::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent);
+}
+.course-icon { font-size: 28px; width: 46px; height: 46px; display:flex; align-items:center; justify-content:center; background: var(--surface-2); border-radius: 12px; flex-shrink: 0; }
+.course-info { flex: 1; min-width: 0; }
+.course-title { font-weight: 700; font-size: 15px; }
+.course-sub { font-size: 12px; color: var(--text-dim); margin: 2px 0 8px; }
+.course-progress { height: 5px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.course-progress-fill { height: 100%; background: var(--accent); }
+.course-progress-label { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+.chev { font-size: 22px; color: var(--text-dim); }
+
+/* ===== Conveyor belt (signature element) ===== */
+.belt { position: relative; padding: 8px 4px 30px; }
+.station {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 12px 14px; margin-bottom: 0; cursor: pointer; position: relative;
+}
+.station.locked { opacity: 0.45; cursor: not-allowed; }
+.station.done { border-color: var(--success); }
+.station.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.station.critical .station-title { color: var(--accent-2); }
+.station-dot {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2);
+  display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;
+  font-family: 'Oswald', sans-serif;
+}
+.station.done .station-dot { background: var(--success); color: #0a1512; }
+.station.current .station-dot { background: var(--accent); color: #16181D; }
+.station-title { font-weight: 600; font-size: 14px; }
+.station-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.crit-flag {
+  display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase;
+  background: rgba(242,183,5,0.15); color: var(--accent-2); padding: 2px 6px; border-radius: 6px; margin-left: 6px;
+  vertical-align: middle;
+}
+.belt-line {
+  width: 2px; height: 20px; background: repeating-linear-gradient(to bottom, var(--border) 0 4px, transparent 4px 8px);
+  margin: 0 0 0 34px;
+}
+.icon-btn { background: none; border: none; color: var(--text-dim); font-size: 16px; cursor: pointer; padding: 6px; flex-shrink: 0; }
+
+/* ===== Lesson ===== */
+.lesson-body { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 18px; }
+.lesson-body p { line-height: 1.6; font-size: 14.5px; margin: 0 0 14px; white-space: pre-wrap; }
+.lesson-body p:last-child { margin-bottom: 0; }
+
+/* ===== Quiz ===== */
+.q-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.q-text { font-weight: 600; font-size: 14.5px; margin-bottom: 12px; }
+.q-options { display: flex; flex-direction: column; gap: 8px; }
+.opt { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; cursor: pointer; font-size: 13.5px; }
+.opt input { accent-color: var(--accent); }
+.opt:has(input:checked) { border-color: var(--accent); background: rgba(255,107,53,0.08); }
+
+/* ===== Buttons ===== */
+.btn-primary { background: var(--accent); color: #16181D; border: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 12px; cursor: pointer; font-family: 'Inter', sans-serif;}
+.btn-block { width: 100%; margin-top: 8px; }
+.btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; }
+
+/* ===== Profile ===== */
+.profile-stats { display: flex; gap: 10px; margin-bottom: 20px; }
+.stat { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; text-align: center; }
+.stat-num { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; color: var(--accent); }
+.stat-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.section-title { font-size: 14px; color: var(--text-dim); margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.badge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.badge { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 8px; text-align: center; }
+.badge.locked { opacity: 0.3; filter: grayscale(1); }
+.badge-icon { font-size: 24px; }
+.badge-title { font-size: 10.5px; margin-top: 6px; color: var(--text-dim); line-height: 1.3; }
+.edit-toggle-row { display: flex; justify-content: space-between; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; font-size: 13.5px; }
+
+/* ===== Bottom nav ===== */
+#bottomnav {
+  position: sticky; bottom: 0; left: 0; right: 0;
+  display: flex; background: var(--surface); border-top: 1px solid var(--border);
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  max-width: 480px; margin: 0 auto;
+}
+.navbtn { flex: 1; background: none; border: none; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; cursor: pointer; padding: 6px; font-family: 'Inter', sans-serif; }
+.navbtn .navicon { font-size: 19px; }
+.navbtn.active { color: var(--accent); }
+
+/* ===== Modal ===== */
+#modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
+#modal.show { display: flex; }
+.modal-card { background: var(--surface); border-radius: 20px 20px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; animation: slideUp .25s ease; }
+.modal-card-wide { max-width: 480px; }
+@keyframes slideUp { from { transform: translateY(30px); opacity:0 } to { transform: translateY(0); opacity:1 } }
+.modal-card h2 { margin: 0 0 16px; font-size: 18px; }
+.modal-card label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+.modal-card input, .modal-card select, .modal-card textarea {
+  display: block; width: 100%; margin-top: 5px; background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: inherit;
+}
+.modal-card textarea { font-family: ui-monospace, monospace; font-size: 12px; }
+.hint { font-size: 11px; color: var(--text-dim); margin-top: -6px; }
+.modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.result-emoji { font-size: 44px; text-align: center; }
+.modal-card .result-emoji + h2 { text-align: center; }
+.modal-card p { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; text-align: center; }
+.warn-text { color: var(--accent-2) !important; }
+
+/* ===== Toasts ===== */
+#toasts { position: fixed; top: 14px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 60; pointer-events: none; }
+.toast {
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  padding: 10px 16px; border-radius: 999px; font-size: 13px; opacity: 0; transform: translateY(-10px);
+  transition: all .3s; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.xp { border-color: var(--accent); color: var(--accent); }
+.toast.badge { border-color: var(--accent-2); color: var(--accent-2); }
+.toast.warn { border-color: var(--danger); color: var(--danger); }
+
+/* ===== Demo banner ===== */
+.demo-banner { background: var(--surface-2); border: 1px dashed var(--border); color: var(--text-dim); font-size: 11.5px; padding: 8px 14px; border-radius: 10px; margin-bottom: 14px; text-align: center; }
+
+@media (min-width: 481px) {
+  #viewport { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+}
+
+</style>
+</head>
+<body>
+<div class="demo-banner" style="max-width:480px;margin:10px auto 0;">Демо-режим предпросмотра в чате: прогресс не сохраняется между перезапусками. В установленном приложении (PWA) — сохраняется на устройстве.</div>
+<div id="viewport">
+  <div id="app"></div>
+  <nav id="bottomnav">
+    <button class="navbtn" data-page="courses"><span class="navicon">📚</span>Курсы</button>
+    <button class="navbtn" data-page="profile"><span class="navicon">🏆</span>Профиль</button>
+  </nav>
+</div>
+<div id="modal"></div>
+<div id="toasts"></div>
+<script>
+// ===== DATA: courses seed content =====
+// Каждый курс: модули типа 'lesson' (текст) или 'quiz' (вопросы).
+// critical: true у вопроса — блок ОТ/ХАССП/стоп-факторов, требует 100% для "зачёта без замечаний".
+
+const SEED_COURSES = [
+  {
+    id: "master-pizza",
+    title: "Мастер смены: пицца-производство",
+    subtitle: "Организация смены, персонал, качество, ОТ — без глубокой технологии (её ведёт технолог)",
+    color: "#FF6B35",
+    icon: "🍕",
+    modules: [
+      {
+        id: "m1", type: "lesson", title: "Роли: мастер и технолог",
+        body: "Мастер смены — организатор процесса: люди, оборудование, документы, соблюдение регламентов.\n\nТехнолог — владелец технологии: рецептуры, параметры процесса, замены сырья.\n\nПравило: параметры техпроцесса не меняются мастером самостоятельно. При отклонении — зафиксировать и сообщить технологу.\n\nЗа мастером: контроль ККТ по графику, остановка процесса при критическом отклонении, эксплуатация оборудования, планирование смены, документооборот, управление людьми."
+      },
+      {
+        id: "m2", type: "quiz", title: "Проверка: роли и разграничение",
+        questions: [
+          { q: "Кто устанавливает и меняет параметры техпроцесса?", options: ["Мастер смены по своему усмотрению", "Технолог", "Бригадир", "Кладовщик"], correct: 1, critical: false },
+          { q: "Мастер обнаружил отклонение веса заготовки. Первое действие?", options: ["Изменить рецептуру самому", "Зафиксировать и сообщить технологу", "Игнорировать", "Остановить смену и уйти"], correct: 1, critical: false },
+          { q: "Можно ли мастеру самостоятельно заменить сырьё в рецептуре при нехватке?", options: ["Да, если ускорит производство", "Нет — только по согласованию с технологом", "Да, если предупредить бригадира", "Да, но только ночью"], correct: 1, critical: false }
+        ]
+      },
+      {
+        id: "m3", type: "lesson", title: "Приём и передача смены",
+        body: "При приёме смены: проверить незавершённые задачи, замечания предыдущей смены, остатки, документы.\n\nПередача смены — не просто 'что сделано', а что НЕ закрыто, почему и кто отвечает.\n\nОбход перед закрытием смены обязателен — не полагаться только на слова предыдущего мастера."
+      },
+      {
+        id: "m4", type: "quiz", title: "Проверка: приём/передача смены",
+        questions: [
+          { q: "Что мастер делает в первую очередь при приёме смены?", options: ["Запускает конвейеры", "Проверяет незавершённые задачи и остатки предыдущей смены", "Уходит на обед", "Формирует заявку на склад"], correct: 1, critical: false },
+          { q: "Что обязательно входит в передачу смены?", options: ["Личное мнение о коллегах", "Что не закрыто, почему и кто отвечает", "План отпусков", "Прогноз погоды"], correct: 1, critical: false }
+        ]
+      },
+      {
+        id: "m5", type: "lesson", title: "Пищевая безопасность и ХАССП",
+        body: "Мастер контролирует критические контрольные точки (ККТ): температура выпечки, хранения начинок, санитария персонала.\n\nПри нарушении температурного режима — зафиксировать и изолировать риск немедленно, не дожидаясь конца смены.\n\nЗоны отклонений: красная (риск безопасности — стоп), жёлтая (замечание без угрозы), зелёная (плановый контроль).\n\nПринцип ротации сырья — FIFO/FEFO. Просроченное сырьё — изолировать, никогда не использовать."
+      },
+      {
+        id: "m6", type: "quiz", title: "Аттестация: ХАССП и качество", critical: true,
+        questions: [
+          { q: "Что относится к критическим контрольным точкам?", options: ["Температура выпечки и хранения начинок", "Цвет спецодежды", "Марка транспорта", "Время обеда"], correct: 0, critical: true },
+          { q: "Обнаружено нарушение температуры хранения сырья. Действие мастера?", options: ["Зафиксировать и остановить риск использования", "Проигнорировать при малой партии", "Сообщить в конце смены", "Изменить срок годности в документах"], correct: 0, critical: true },
+          { q: "Что запрещено делать с просроченным сырьём?", options: ["Изолировать", "Использовать, если выглядит нормально", "Сообщить специалисту по качеству", "Оформить как отклонение"], correct: 1, critical: true },
+          { q: "Принцип ротации сырья на складе:", options: ["LIFO", "FIFO/FEFO — по срокам поступления и годности", "Произвольно", "Не требуется"], correct: 1, critical: true }
+        ]
+      },
+      {
+        id: "m7", type: "lesson", title: "Охрана труда",
+        body: "Мастер обязан знать инструкции по ОТ для конкретного оборудования и участка — не только общие правила.\n\nПри травме сотрудника: обеспечить первую помощь, сообщить ответственным, зафиксировать, инициировать расследование.\n\nДопуск без инструктажа по ОТ, запуск оборудования без проверки защит, сокрытие инцидента — стоп-факторы допуска мастера к самостоятельной работе."
+      },
+      {
+        id: "m8", type: "quiz", title: "Аттестация: охрана труда", critical: true,
+        questions: [
+          { q: "Действия при травме сотрудника на смене:", options: ["Продолжить работу, отложив разбирательство", "Первая помощь, уведомление, фиксация, расследование", "Скрыть, если травма лёгкая", "Отправить домой без фиксации"], correct: 1, critical: true },
+          { q: "Допуск сотрудника без инструктажа по ОТ — это:", options: ["Допустимо в исключительных случаях", "Критическая ошибка, стоп-фактор", "Обычная практика", "Разрешено для опытных"], correct: 1, critical: true },
+          { q: "Запуск оборудования без проверки защитных устройств:", options: ["Допустим для скорости", "Недопустим ни при каких условиях", "Разрешён при личном контроле без проверки", "Разрешён днём"], correct: 1, critical: true }
+        ]
+      },
+      {
+        id: "m9", type: "lesson", title: "Нештатные ситуации и стоп-факторы",
+        body: "Брак партии: изолировать продукцию, определить объём, оформить отклонение — не списывать без документов.\n\nСтоп-факторы допуска: допуск неподготовленного сотрудника, запуск оборудования без проверки, сокрытие брака или инцидента, недостоверная отчётность.\n\nКритические ошибки не прощаются опытом — по ним назначается повторное обучение и повторная проверка, независимо от общего результата теста."
+      },
+      {
+        id: "m10", type: "quiz", title: "Аттестация: нештатные ситуации", critical: true,
+        questions: [
+          { q: "Обнаружен брак партии. Порядок действий:", options: ["Списать без документов", "Изолировать, определить объём, оформить отклонение", "Отправить потребителю", "Игнорировать, если незаметно"], correct: 1, critical: true },
+          { q: "Что относится к стоп-факторам допуска?", options: ["Небольшие опоздания на пятиминутку", "Допуск неподготовленного сотрудника, запуск без проверки, сокрытие брака", "Разные предпочтения по расстановке", "Другая ручка для подписи"], correct: 1, critical: true },
+          { q: "Критические ошибки в системе допуска:", options: ["Прощаются с опытом", "Не прощаются — повторное обучение и проверка", "Учитываются только повторно", "Влияют лишь на премию"], correct: 1, critical: true }
+        ]
+      }
+    ]
+  },
+  {
+    id: "safety-intro",
+    title: "Вводный инструктаж: охрана труда",
+    subtitle: "Пример второго курса — показывает, что приложение не привязано к одной теме",
+    color: "#1FB6A6",
+    icon: "🦺",
+    modules: [
+      { id: "s1", type: "lesson", title: "Общие требования", body: "Каждый сотрудник проходит вводный инструктаж до допуска к работе. СИЗ обязательны на закреплённых участках. Рабочая зона должна быть свободна от посторонних предметов." },
+      { id: "s2", type: "quiz", title: "Проверка знаний", questions: [
+        { q: "СИЗ на производстве:", options: ["Обязательны на закреплённых участках", "Только по желанию", "Только для новых", "Не требуются на коротких сменах"], correct: 0, critical: true }
+      ]},
+      { id: "s3", type: "lesson", title: "Действия при происшествии", body: "При любом происшествии: обеспечить безопасность, оказать помощь, сообщить руководителю, зафиксировать обстоятельства." }
+    ]
+  }
+];
+
+// ===== Gamification config =====
+const LEVELS = [0, 50, 120, 220, 350, 520, 750, 1050, 1450, 2000]; // XP threshold per level index
+const BADGES = [
+  { id: "first-quiz", title: "Первый тест", desc: "Пройден первый тест", icon: "🥇" },
+  { id: "perfect", title: "Без ошибок", desc: "Тест сдан на 100% с первой попытки", icon: "💯" },
+  { id: "critical-clear", title: "Критично важно", desc: "Пройден критический блок (ОТ/ХАССП) без единой ошибки", icon: "🛡️" },
+  { id: "course-done", title: "Курс завершён", desc: "Пройдены все модули курса", icon: "🏁" },
+  { id: "streak-3", title: "Разогрев", desc: "3 дня подряд занятий", icon: "🔥" },
+  { id: "streak-7", title: "Неделя дисциплины", desc: "7 дней подряд занятий", icon: "⚡" }
+];
+
+</script>
+<script>
+// ===== STORAGE ADAPTER =====
+// __STORAGE_ADAPTER__ placeholder is replaced at build time:
+//  - preview build: in-memory object (chat demo, no persistence)
+//  - deploy build: localStorage (real installed PWA)
+const Storage = {
+  key: "shiftmaster_edu_state_v1",
+  _mem: null,
+  load() {
+    if (this._mem) return this._mem; this._mem = null; return null;
+  },
+  save(state) {
+    this._mem = state;
+  }
+};
+
+// ===== STATE =====
+function defaultState() {
+  return {
+    courses: JSON.parse(JSON.stringify(SEED_COURSES)),
+    progress: {}, // { courseId: { completedModules: [id,...], quizResults: { moduleId: {score, total, perfect, criticalOk} } } }
+    xp: 0,
+    badges: [],
+    lastActiveDate: null,
+    streak: 0,
+    editMode: false
+  };
+}
+
+let STATE = Storage.load() || defaultState();
+// backfill in case seed grew since last save
+SEED_COURSES.forEach(sc => {
+  if (!STATE.courses.find(c => c.id === sc.id)) STATE.courses.push(JSON.parse(JSON.stringify(sc)));
+});
+
+function persist() { Storage.save(STATE); }
+
+function courseProgress(courseId) {
+  if (!STATE.progress[courseId]) STATE.progress[courseId] = { completedModules: [], quizResults: {} };
+  return STATE.progress[courseId];
+}
+
+function getCourse(id) { return STATE.courses.find(c => c.id === id); }
+function getModule(courseId, moduleId) { return getCourse(courseId).modules.find(m => m.id === moduleId); }
+
+function levelForXp(xp) {
+  let lvl = 1;
+  for (let i = 0; i < LEVELS.length; i++) { if (xp >= LEVELS[i]) lvl = i + 1; }
+  return lvl;
+}
+function xpForNextLevel(xp) {
+  const lvl = levelForXp(xp);
+  if (lvl >= LEVELS.length) return null;
+  return LEVELS[lvl];
+}
+
+function touchStreak() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (STATE.lastActiveDate === today) return;
+  const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  STATE.streak = (STATE.lastActiveDate === y) ? STATE.streak + 1 : 1;
+  STATE.lastActiveDate = today;
+  if (STATE.streak >= 3) awardBadge("streak-3");
+  if (STATE.streak >= 7) awardBadge("streak-7");
+}
+
+function awardBadge(id) {
+  if (!STATE.badges.includes(id)) { STATE.badges.push(id); toast("Новый значок: " + BADGES.find(b => b.id === id).title, "badge"); }
+}
+
+function awardXp(n) { STATE.xp += n; }
+
+function completeLesson(courseId, moduleId) {
+  touchStreak();
+  const p = courseProgress(courseId);
+  if (!p.completedModules.includes(moduleId)) { p.completedModules.push(moduleId); awardXp(10); }
+  checkCourseDone(courseId);
+  persist();
+}
+
+function submitQuiz(courseId, moduleId, answers) {
+  touchStreak();
+  const mod = getModule(courseId, moduleId);
+  let correct = 0;
+  let criticalOk = true;
+  mod.questions.forEach((q, i) => {
+    const ok = answers[i] === q.correct;
+    if (ok) correct++;
+    if (q.critical && !ok) criticalOk = false;
+  });
+  const total = mod.questions.length;
+  const perfect = correct === total;
+  const first = !STATE.progress[courseId] || !courseProgress(courseId).quizResults[moduleId];
+
+  const p = courseProgress(courseId);
+  p.quizResults[moduleId] = { score: correct, total, perfect, criticalOk };
+  if (!p.completedModules.includes(moduleId)) p.completedModules.push(moduleId);
+
+  let xp = correct * 8;
+  if (perfect) xp += 20;
+  awardXp(xp);
+
+  if (first) awardBadge("first-quiz");
+  if (perfect) awardBadge("perfect");
+  if (mod.critical && criticalOk) awardBadge("critical-clear");
+  checkCourseDone(courseId);
+  persist();
+  return { score: correct, total, perfect, criticalOk };
+}
+
+function checkCourseDone(courseId) {
+  const course = getCourse(courseId);
+  const p = courseProgress(courseId);
+  if (course.modules.every(m => p.completedModules.includes(m.id))) awardBadge("course-done");
+}
+
+// ===== TOAST =====
+function toast(msg, kind) {
+  const el = document.createElement("div");
+  el.className = "toast " + (kind || "");
+  el.textContent = msg;
+  document.getElementById("toasts").appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 300); }, 2600);
+}
+
+// ===== ROUTER =====
+function currentRoute() {
+  const h = location.hash.slice(2) || "courses";
+  return h.split("/");
+}
+window.addEventListener("hashchange", render);
+
+function nav(path) { location.hash = "#/" + path; }
+
+// ===== RENDER ROOT =====
+function render() {
+  const root = document.getElementById("app");
+  const [page, a, b] = currentRoute();
+  let html = "";
+  if (page === "courses") html = renderCourseList();
+  else if (page === "course") html = renderCourseDetail(a);
+  else if (page === "lesson") html = renderLesson(a, b);
+  else if (page === "quiz") html = renderQuiz(a, b);
+  else if (page === "profile") html = renderProfile();
+  else html = renderCourseList();
+
+  root.innerHTML = html;
+  document.querySelectorAll(".navbtn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.page === page);
+  });
+  window.scrollTo(0, 0);
+  attachHandlers(page, a, b);
+}
+
+// ===== SCREENS =====
+function renderTopStats() {
+  const lvl = levelForXp(STATE.xp);
+  const next = xpForNextLevel(STATE.xp);
+  const prevThresh = LEVELS[lvl - 1] || 0;
+  const pct = next ? Math.round(((STATE.xp - prevThresh) / (next - prevThresh)) * 100) : 100;
+  return `
+    <div class="topstats">
+      <div class="lvl-badge">Ур. ${lvl}</div>
+      <div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div>
+      <div class="xp-num">${STATE.xp} XP</div>
+      <div class="streak">🔥 ${STATE.streak}</div>
+    </div>`;
+}
+
+function renderCourseList() {
+  const cards = STATE.courses.map(c => {
+    const p = courseProgress(c.id);
+    const total = c.modules.length;
+    const done = c.modules.filter(m => p.completedModules.includes(m.id)).length;
+    const pct = total ? Math.round(done / total * 100) : 0;
+    return `
+      <div class="course-card" style="--accent:${c.color}" data-open-course="${c.id}">
+        <div class="course-icon">${c.icon}</div>
+        <div class="course-info">
+          <div class="course-title">${escapeHtml(c.title)}</div>
+          <div class="course-sub">${escapeHtml(c.subtitle || "")}</div>
+          <div class="course-progress"><div class="course-progress-fill" style="width:${pct}%"></div></div>
+          <div class="course-progress-label">${done}/${total} модулей</div>
+        </div>
+        ${STATE.editMode ? `<button class="icon-btn" data-edit-course="${c.id}">✏️</button>` : `<div class="chev">›</div>`}
+      </div>`;
+  }).join("");
+
+  return `
+    ${renderTopStats()}
+    <div class="screen-header">
+      <h1>Курсы</h1>
+      ${STATE.editMode ? `<button class="btn-ghost" data-add-course>+ Курс</button>` : ""}
+    </div>
+    <div class="course-list">${cards}</div>
+  `;
+}
+
+function renderCourseDetail(courseId) {
+  const c = getCourse(courseId);
+  if (!c) return renderCourseList();
+  const p = courseProgress(courseId);
+  const stations = c.modules.map((m, i) => {
+    const done = p.completedModules.includes(m.id);
+    const locked = i > 0 && !p.completedModules.includes(c.modules[i - 1].id) && !STATE.editMode;
+    const qr = m.type === "quiz" ? p.quizResults[m.id] : null;
+    const critical = m.critical || (m.type === "quiz" && m.questions && m.questions.some(q => q.critical));
+    let stateClass = done ? "done" : (locked ? "locked" : "current");
+    return `
+      <div class="station ${stateClass} ${critical ? "critical" : ""}" ${locked ? "" : `data-open-module="${m.id}"`}>
+        <div class="station-dot">${done ? "✓" : (locked ? "🔒" : (m.type === "quiz" ? "?" : "•"))}</div>
+        <div class="station-label">
+          <div class="station-title">${escapeHtml(m.title)} ${critical ? '<span class="crit-flag">крит.</span>' : ""}</div>
+          <div class="station-meta">${m.type === "quiz" ? (qr ? `Результат: ${qr.score}/${qr.total}` : (m.questions.length + " вопр.")) : "Урок"}</div>
+        </div>
+        ${STATE.editMode ? `<button class="icon-btn" data-edit-module="${courseId}|${m.id}">✏️</button>` : ""}
+      </div>`;
+  }).join(`<div class="belt-line"></div>`);
+
+  return `
+    <div class="screen-header">
+      <button class="back-btn" data-back>‹</button>
+      <h1>${escapeHtml(c.title)}</h1>
+    </div>
+    ${STATE.editMode ? `<button class="btn-ghost" data-add-module="${courseId}" style="margin:8px 20px;">+ Модуль</button>` : ""}
+    <div class="belt">${stations}</div>
+  `;
+}
+
+function renderLesson(courseId, moduleId) {
+  const m = getModule(courseId, moduleId);
+  const paragraphs = m.body.split("\n\n").map(t => `<p>${escapeHtml(t)}</p>`).join("");
+  return `
+    <div class="screen-header">
+      <button class="back-btn" data-back-course="${courseId}">‹</button>
+      <h1>${escapeHtml(m.title)}</h1>
+    </div>
+    <div class="lesson-body">${paragraphs}</div>
+    <button class="btn-primary btn-block" data-complete-lesson="${courseId}|${moduleId}">Понятно, продолжить (+10 XP)</button>
+  `;
+}
+
+function renderQuiz(courseId, moduleId) {
+  const m = getModule(courseId, moduleId);
+  const qs = m.questions.map((q, i) => `
+    <div class="q-block" data-qi="${i}">
+      <div class="q-text">${i + 1}. ${escapeHtml(q.q)} ${q.critical ? '<span class="crit-flag">крит.</span>' : ""}</div>
+      <div class="q-options">
+        ${q.options.map((o, oi) => `<label class="opt"><input type="radio" name="q${i}" value="${oi}"><span>${escapeHtml(o)}</span></label>`).join("")}
+      </div>
+    </div>`).join("");
+  return `
+    <div class="screen-header">
+      <button class="back-btn" data-back-course="${courseId}">‹</button>
+      <h1>${escapeHtml(m.title)}</h1>
+    </div>
+    <form id="quiz-form">
+      ${qs}
+      <button type="submit" class="btn-primary btn-block">Проверить ответы</button>
+    </form>
+  `;
+}
+
+function renderProfile() {
+  const lvl = levelForXp(STATE.xp);
+  const badgeGrid = BADGES.map(b => {
+    const got = STATE.badges.includes(b.id);
+    return `<div class="badge ${got ? "" : "locked"}"><div class="badge-icon">${b.icon}</div><div class="badge-title">${b.title}</div></div>`;
+  }).join("");
+  return `
+    ${renderTopStats()}
+    <div class="screen-header"><h1>Профиль</h1></div>
+    <div class="profile-stats">
+      <div class="stat"><div class="stat-num">${STATE.xp}</div><div class="stat-label">Опыт (XP)</div></div>
+      <div class="stat"><div class="stat-num">${lvl}</div><div class="stat-label">Уровень</div></div>
+      <div class="stat"><div class="stat-num">${STATE.streak}</div><div class="stat-label">Дней подряд</div></div>
+    </div>
+    <h2 class="section-title">Значки</h2>
+    <div class="badge-grid">${badgeGrid}</div>
+    <h2 class="section-title">Режим редактирования</h2>
+    <div class="edit-toggle-row">
+      <span>${STATE.editMode ? "Включён — можно редактировать курсы" : "Выключен"}</span>
+      <button class="btn-ghost" data-toggle-edit>${STATE.editMode ? "Выключить" : "Включить"}</button>
+    </div>
+    <button class="btn-ghost btn-block" data-reset style="margin-top:24px;color:var(--danger)">Сбросить прогресс</button>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ===== EVENT HANDLERS =====
+function attachHandlers(page) {
+  document.querySelectorAll("[data-open-course]").forEach(el =>
+    el.addEventListener("click", e => { if (e.target.closest("[data-edit-course]")) return; nav("course/" + el.dataset.openCourse); }));
+
+  document.querySelectorAll("[data-back]").forEach(el => el.addEventListener("click", () => nav("courses")));
+  document.querySelectorAll("[data-back-course]").forEach(el => el.addEventListener("click", () => nav("course/" + el.dataset.backCourse)));
+
+  document.querySelectorAll("[data-open-module]").forEach(el => el.addEventListener("click", e => {
+    if (e.target.closest("[data-edit-module]")) return;
+    const [page0, courseId] = currentRoute();
+    const moduleId = el.dataset.openModule;
+    const m = getModule(courseId, moduleId);
+    nav((m.type === "quiz" ? "quiz/" : "lesson/") + courseId + "/" + moduleId);
+  }));
+
+  document.querySelectorAll("[data-complete-lesson]").forEach(el => el.addEventListener("click", () => {
+    const [courseId, moduleId] = el.dataset.completeLesson.split("|");
+    completeLesson(courseId, moduleId);
+    toast("+10 XP", "xp");
+    nav("course/" + courseId);
+  }));
+
+  const quizForm = document.getElementById("quiz-form");
+  if (quizForm) quizForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const [, courseId, moduleId] = currentRoute();
+    const m = getModule(courseId, moduleId);
+    const answers = m.questions.map((q, i) => {
+      const checked = quizForm.querySelector(`input[name="q${i}"]:checked`);
+      return checked ? parseInt(checked.value) : -1;
+    });
+    if (answers.includes(-1)) { toast("Ответьте на все вопросы", "warn"); return; }
+    const result = submitQuiz(courseId, moduleId, answers);
+    showQuizResult(courseId, moduleId, result);
+  });
+
+  document.querySelectorAll(".navbtn").forEach(el => el.addEventListener("click", () => nav(el.dataset.page)));
+
+  document.querySelectorAll("[data-toggle-edit]").forEach(el => el.addEventListener("click", toggleEditMode));
+  document.querySelectorAll("[data-reset]").forEach(el => el.addEventListener("click", () => {
+    if (confirm("Сбросить весь прогресс, XP и значки?")) { STATE = defaultState(); persist(); render(); }
+  }));
+
+  document.querySelectorAll("[data-add-course]").forEach(el => el.addEventListener("click", openCourseEditor));
+  document.querySelectorAll("[data-edit-course]").forEach(el => el.addEventListener("click", e => { e.stopPropagation(); openCourseEditor(el.dataset.editCourse); }));
+  document.querySelectorAll("[data-add-module]").forEach(el => el.addEventListener("click", () => openModuleEditor(el.dataset.addModule)));
+  document.querySelectorAll("[data-edit-module]").forEach(el => el.addEventListener("click", e => {
+    e.stopPropagation();
+    const [courseId, moduleId] = el.dataset.editModule.split("|");
+    openModuleEditor(courseId, moduleId);
+  }));
+}
+
+function showQuizResult(courseId, moduleId, r) {
+  const modal = document.getElementById("modal");
+  const pct = Math.round(r.score / r.total * 100);
+  modal.innerHTML = `
+    <div class="modal-card">
+      <div class="result-emoji">${r.perfect ? "🏆" : r.criticalOk ? "✅" : "⚠️"}</div>
+      <h2>${r.perfect ? "Отлично, без ошибок!" : r.criticalOk ? "Тест пройден" : "Есть критические ошибки"}</h2>
+      <p>Правильных ответов: ${r.score} из ${r.total} (${pct}%)</p>
+      ${!r.criticalOk ? `<p class="warn-text">Ошибка в критическом вопросе (ОТ/ХАССП) — по регламенту требуется отдельный разбор с наставником перед допуском, независимо от процента.</p>` : ""}
+      <button class="btn-primary btn-block" data-close-modal>Продолжить</button>
+    </div>`;
+  modal.classList.add("show");
+  modal.querySelector("[data-close-modal]").addEventListener("click", () => {
+    modal.classList.remove("show"); modal.innerHTML = "";
+    nav("course/" + courseId);
+  });
+}
+
+function toggleEditMode() {
+  if (!STATE.editMode) {
+    const pin = prompt("Введите PIN редактора (по умолчанию 1234):");
+    if (pin !== "1234") { toast("Неверный PIN", "warn"); return; }
+  }
+  STATE.editMode = !STATE.editMode;
+  persist();
+  render();
+}
+
+// ===== EDIT MODALS =====
+function openCourseEditor(courseId) {
+  const c = courseId ? getCourse(courseId) : null;
+  const modal = document.getElementById("modal");
+  modal.innerHTML = `
+    <div class="modal-card">
+      <h2>${c ? "Редактировать курс" : "Новый курс"}</h2>
+      <label>Название<input id="f-title" value="${c ? escapeHtml(c.title) : ""}"></label>
+      <label>Подзаголовок<input id="f-sub" value="${c ? escapeHtml(c.subtitle || "") : ""}"></label>
+      <label>Иконка (эмодзи)<input id="f-icon" value="${c ? c.icon : "📘"}"></label>
+      <label>Цвет акцента<input id="f-color" type="color" value="${c ? c.color : "#FF6B35"}"></label>
+      <div class="modal-actions">
+        ${c ? `<button class="btn-ghost" style="color:var(--danger)" data-del-course="${c.id}">Удалить курс</button>` : ""}
+        <button class="btn-primary" data-save-course="${c ? c.id : ""}">Сохранить</button>
+      </div>
+    </div>`;
+  modal.classList.add("show");
+  modal.querySelector("[data-save-course]").addEventListener("click", () => {
+    const title = document.getElementById("f-title").value.trim();
+    if (!title) { toast("Укажите название", "warn"); return; }
+    if (c) {
+      c.title = title; c.subtitle = document.getElementById("f-sub").value.trim();
+      c.icon = document.getElementById("f-icon").value.trim() || "📘";
+      c.color = document.getElementById("f-color").value;
+    } else {
+      STATE.courses.push({ id: "c" + Date.now(), title, subtitle: document.getElementById("f-sub").value.trim(), icon: document.getElementById("f-icon").value.trim() || "📘", color: document.getElementById("f-color").value, modules: [] });
+    }
+    persist(); closeModal(); render();
+  });
+  const delBtn = modal.querySelector("[data-del-course]");
+  if (delBtn) delBtn.addEventListener("click", () => {
+    if (confirm("Удалить курс со всеми модулями?")) {
+      STATE.courses = STATE.courses.filter(x => x.id !== c.id);
+      delete STATE.progress[c.id];
+      persist(); closeModal(); nav("courses");
+    }
+  });
+}
+
+function openModuleEditor(courseId, moduleId) {
+  const c = getCourse(courseId);
+  const m = moduleId ? getModule(courseId, moduleId) : null;
+  const modal = document.getElementById("modal");
+  const type = m ? m.type : "lesson";
+  modal.innerHTML = `
+    <div class="modal-card modal-card-wide">
+      <h2>${m ? "Редактировать модуль" : "Новый модуль"}</h2>
+      <label>Название<input id="f-mtitle" value="${m ? escapeHtml(m.title) : ""}"></label>
+      <label>Тип
+        <select id="f-mtype">
+          <option value="lesson" ${type === "lesson" ? "selected" : ""}>Урок (текст)</option>
+          <option value="quiz" ${type === "quiz" ? "selected" : ""}>Тест</option>
+        </select>
+      </label>
+      <div id="f-lesson-fields" style="${type === "lesson" ? "" : "display:none"}">
+        <label>Текст урока (абзацы через пустую строку)<textarea id="f-body" rows="6">${m && m.type === "lesson" ? escapeHtml(m.body) : ""}</textarea></label>
+      </div>
+      <div id="f-quiz-fields" style="${type === "quiz" ? "" : "display:none"}">
+        <label>Вопросы (JSON-формат)
+          <textarea id="f-questions" rows="8">${m && m.type === "quiz" ? escapeHtml(JSON.stringify(m.questions, null, 2)) : escapeHtml(JSON.stringify([{ q: "Текст вопроса", options: ["Вариант 1", "Вариант 2", "Вариант 3"], correct: 0, critical: false }], null, 2))}</textarea>
+        </label>
+        <p class="hint">correct — индекс правильного варианта (с 0). critical: true — вопрос по ОТ/ХАССП/стоп-факторам.</p>
+      </div>
+      <div class="modal-actions">
+        ${m ? `<button class="btn-ghost" style="color:var(--danger)" data-del-module="${courseId}|${m.id}">Удалить</button>` : ""}
+        <button class="btn-primary" data-save-module="${courseId}|${m ? m.id : ""}">Сохранить</button>
+      </div>
+    </div>`;
+  modal.classList.add("show");
+
+  const typeSel = document.getElementById("f-mtype");
+  typeSel.addEventListener("change", () => {
+    document.getElementById("f-lesson-fields").style.display = typeSel.value === "lesson" ? "" : "none";
+    document.getElementById("f-quiz-fields").style.display = typeSel.value === "quiz" ? "" : "none";
+  });
+
+  modal.querySelector("[data-save-module]").addEventListener("click", () => {
+    const title = document.getElementById("f-mtitle").value.trim();
+    if (!title) { toast("Укажите название", "warn"); return; }
+    const mtype = typeSel.value;
+    let newMod;
+    if (mtype === "lesson") {
+      newMod = { id: m ? m.id : "mod" + Date.now(), type: "lesson", title, body: document.getElementById("f-body").value.trim() };
+    } else {
+      let questions;
+      try { questions = JSON.parse(document.getElementById("f-questions").value); }
+      catch (e) { toast("Ошибка в JSON вопросов", "warn"); return; }
+      newMod = { id: m ? m.id : "mod" + Date.now(), type: "quiz", title, questions };
+    }
+    if (m) {
+      const idx = c.modules.findIndex(x => x.id === m.id);
+      c.modules[idx] = newMod;
+    } else {
+      c.modules.push(newMod);
+    }
+    persist(); closeModal(); render();
+  });
+
+  const delBtn = modal.querySelector("[data-del-module]");
+  if (delBtn) delBtn.addEventListener("click", () => {
+    if (confirm("Удалить модуль?")) {
+      c.modules = c.modules.filter(x => x.id !== m.id);
+      persist(); closeModal(); nav("course/" + courseId);
+    }
+  });
+}
+
+function closeModal() {
+  const modal = document.getElementById("modal");
+  modal.classList.remove("show"); modal.innerHTML = "";
+}
+
+// ===== INIT =====
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
+  render();
+});
+
+</script>
+</body>
+</html>

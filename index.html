@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Смена+ — обучение с геймификацией</title>
+<meta name="theme-color" content="#16181D">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="viewport">
+  <div id="app"></div>
+  <nav id="bottomnav">
+    <button class="navbtn" data-page="courses"><span class="navicon">📚</span>Курсы</button>
+    <button class="navbtn" data-page="profile"><span class="navicon">🏆</span>Профиль</button>
+  </nav>
+</div>
+<div id="modal"></div>
+<div id="toasts"></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>
