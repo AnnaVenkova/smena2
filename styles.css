@@ -204,6 +204,34 @@ h1, h2, .display {
 /* ===== Demo banner ===== */
 .demo-banner { background: var(--surface-2); border: 1px dashed var(--border); color: var(--text-dim); font-size: 11.5px; padding: 8px 14px; border-radius: 10px; margin-bottom: 14px; text-align: center; }
 
+/* ===== Onboarding ===== */
+.onboard { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh; text-align: center; padding: 20px; }
+.onboard-emoji { font-size: 56px; margin-bottom: 6px; }
+.onboard h1 { font-size: 30px; margin: 0 0 10px; }
+.onboard-sub { color: var(--text-dim); font-size: 14px; line-height: 1.5; margin-bottom: 22px; max-width: 320px; }
+.onboard-input { width: 100%; max-width: 320px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 12px; padding: 14px; font-size: 15px; margin-bottom: 14px; text-align: center; }
+.onboard .btn-block { max-width: 320px; }
+
+/* ===== Hello row / sync ===== */
+.hello-row { font-size: 12px; color: var(--text-dim); margin: -8px 0 14px; display: flex; align-items: center; gap: 6px; }
+.sync-dot { color: var(--success); font-size: 9px; }
+
+/* ===== Portal ===== */
+.portal-card::before { background: var(--accent-2); }
+
+/* ===== Admin ===== */
+.admin-list { display: flex; flex-direction: column; gap: 10px; }
+.admin-user-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; cursor: pointer; }
+.admin-user-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.admin-user-name { font-weight: 700; font-size: 14.5px; }
+.lvl-badge.small { padding: 2px 8px; font-size: 10.5px; }
+.admin-user-meta { font-size: 12px; color: var(--text); margin-top: 2px; }
+.admin-user-meta.dim { color: var(--text-dim); }
+.admin-course-block { margin-bottom: 14px; text-align: left; }
+.admin-course-title { font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+.admin-mod-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.admin-mod-row .dim { color: var(--text-dim); }
+
 @media (min-width: 481px) {
   #viewport { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 }

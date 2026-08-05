@@ -15,11 +15,18 @@
   <div id="app"></div>
   <nav id="bottomnav">
     <button class="navbtn" data-page="courses"><span class="navicon">📚</span>Курсы</button>
+    <button class="navbtn" data-page="portal"><span class="navicon">📖</span>Портал</button>
     <button class="navbtn" data-page="profile"><span class="navicon">🏆</span>Профиль</button>
+    <button class="navbtn" data-page="admin" style="display:none"><span class="navicon">📊</span>Админ</button>
   </nav>
 </div>
 <div id="modal"></div>
 <div id="toasts"></div>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="sheets-config.js"></script>
+<script src="cloud.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
 <script>

@@ -1,0 +1,31 @@
+// Код для Google Apps Script (Расширения → Apps Script в вашей Google Таблице).
+// Замените содержимое редактора на этот код целиком, затем разверните как Web App
+// (см. инструкцию в sheets-config.js).
+
+function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Результаты")
+    || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+
+  var data = JSON.parse(e.postData.contents);
+  var rows = data.rows || [];
+
+  rows.forEach(function (r) {
+    sheet.appendRow([
+      r.name || "",
+      r.course || "",
+      r.module || "",
+      r.score,
+      r.total,
+      r.criticalOk === false ? "Нет" : "Да",
+      r.date || new Date().toISOString()
+    ]);
+  });
+
+  return ContentService.createTextOutput(JSON.stringify({ status: "ok", added: rows.length }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Необязательно: проверка, что скрипт вообще отвечает (откройте URL /exec в браузере)
+function doGet(e) {
+  return ContentService.createTextOutput("Смена+ webhook работает. Отправляйте POST-запросы.");
+}

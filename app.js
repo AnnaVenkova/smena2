@@ -1,9 +1,6 @@
-// ===== STORAGE ADAPTER =====
-// __STORAGE_ADAPTER__ placeholder is replaced at build time:
-//  - preview build: in-memory object (chat demo, no persistence)
-//  - deploy build: localStorage (real installed PWA)
+// ===== STORAGE ADAPTER (локальный кэш на устройстве) =====
 const Storage = {
-  key: "shiftmaster_edu_state_v1",
+  key: "shiftmaster_edu_state_v2",
   _mem: null,
   load() {
     try {
@@ -20,8 +17,11 @@ const Storage = {
 // ===== STATE =====
 function defaultState() {
   return {
+    userId: null,
+    userName: null,
     courses: JSON.parse(JSON.stringify(SEED_COURSES)),
-    progress: {}, // { courseId: { completedModules: [id,...], quizResults: { moduleId: {score, total, perfect, criticalOk} } } }
+    portal: JSON.parse(JSON.stringify(SEED_PORTAL)),
+    progress: {},
     xp: 0,
     badges: [],
     lastActiveDate: null,
@@ -31,12 +31,32 @@ function defaultState() {
 }
 
 let STATE = Storage.load() || defaultState();
-// backfill in case seed grew since last save
 SEED_COURSES.forEach(sc => {
   if (!STATE.courses.find(c => c.id === sc.id)) STATE.courses.push(JSON.parse(JSON.stringify(sc)));
 });
+if (!STATE.portal) STATE.portal = JSON.parse(JSON.stringify(SEED_PORTAL));
 
-function persist() { Storage.save(STATE); }
+function persist() {
+  Storage.save(STATE);
+  if (cloudReady && STATE.userId) {
+    cloudSaveUser(STATE.userId, {
+      name: STATE.userName,
+      xp: STATE.xp,
+      badges: STATE.badges,
+      streak: STATE.streak,
+      lastActiveDate: STATE.lastActiveDate,
+      progress: STATE.progress
+    });
+  }
+}
+
+function persistContent() {
+  Storage.save(STATE);
+  if (cloudReady && STATE.editMode) {
+    cloudSaveContent(STATE.courses);
+    cloudSavePortal(STATE.portal);
+  }
+}
 
 function courseProgress(courseId) {
   if (!STATE.progress[courseId]) STATE.progress[courseId] = { completedModules: [], quizResults: {} };
@@ -70,7 +90,6 @@ function touchStreak() {
 function awardBadge(id) {
   if (!STATE.badges.includes(id)) { STATE.badges.push(id); toast("Новый значок: " + BADGES.find(b => b.id === id).title, "badge"); }
 }
-
 function awardXp(n) { STATE.xp += n; }
 
 function completeLesson(courseId, moduleId) {
@@ -96,7 +115,7 @@ function submitQuiz(courseId, moduleId, answers) {
   const first = !STATE.progress[courseId] || !courseProgress(courseId).quizResults[moduleId];
 
   const p = courseProgress(courseId);
-  p.quizResults[moduleId] = { score: correct, total, perfect, criticalOk };
+  p.quizResults[moduleId] = { score: correct, total, perfect, criticalOk, at: Date.now() };
   if (!p.completedModules.includes(moduleId)) p.completedModules.push(moduleId);
 
   let xp = correct * 8;
@@ -108,6 +127,9 @@ function submitQuiz(courseId, moduleId, answers) {
   if (mod.critical && criticalOk) awardBadge("critical-clear");
   checkCourseDone(courseId);
   persist();
+
+  if (mod.isFinalExam) sendExamToSheets(courseId, moduleId, { score: correct, total, perfect, criticalOk });
+
   return { score: correct, total, perfect, criticalOk };
 }
 
@@ -133,11 +155,11 @@ function currentRoute() {
   return h.split("/");
 }
 window.addEventListener("hashchange", render);
-
 function nav(path) { location.hash = "#/" + path; }
 
 // ===== RENDER ROOT =====
 function render() {
+  if (!STATE.userId) { renderOnboarding(); return; }
   const root = document.getElementById("app");
   const [page, a, b] = currentRoute();
   let html = "";
@@ -145,18 +167,76 @@ function render() {
   else if (page === "course") html = renderCourseDetail(a);
   else if (page === "lesson") html = renderLesson(a, b);
   else if (page === "quiz") html = renderQuiz(a, b);
+  else if (page === "portal") html = renderPortalList();
+  else if (page === "article") html = renderArticle(a);
   else if (page === "profile") html = renderProfile();
+  else if (page === "admin") html = renderAdminLoading();
   else html = renderCourseList();
 
   root.innerHTML = html;
-  document.querySelectorAll(".navbtn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.page === page);
-  });
+  document.getElementById("bottomnav").style.display = "flex";
+  document.querySelectorAll(".navbtn").forEach(btn => btn.classList.toggle("active", btn.dataset.page === page));
+  const adminBtn = document.querySelector('.navbtn[data-page="admin"]');
+  if (adminBtn) adminBtn.style.display = STATE.editMode ? "flex" : "none";
   window.scrollTo(0, 0);
   attachHandlers(page, a, b);
+
+  if (page === "admin") loadAndRenderAdmin();
 }
 
-// ===== SCREENS =====
+// ===== ONBOARDING (первый запуск — имя пользователя) =====
+function renderOnboarding() {
+  const root = document.getElementById("app");
+  document.getElementById("bottomnav").style.display = "none";
+  root.innerHTML = `
+    <div class="onboard">
+      <div class="onboard-emoji">🍕</div>
+      <h1>Смена+</h1>
+      <p class="onboard-sub">Обучение с геймификацией. Прежде чем начать — как вас зовут? Это нужно, чтобы наставник видел ваш прогресс.</p>
+      <input id="f-username" placeholder="Имя и фамилия" class="onboard-input">
+      <button class="btn-primary btn-block" data-start>Начать обучение</button>
+    </div>`;
+  document.getElementById("f-username").focus();
+  const go = () => {
+    const name = document.getElementById("f-username").value.trim();
+    if (!name) { toast("Введите имя", "warn"); return; }
+    STATE.userId = "u_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    STATE.userName = name;
+    persist();
+    syncFromCloud().then(render);
+  };
+  document.querySelector("[data-start]").addEventListener("click", go);
+  document.getElementById("f-username").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+}
+
+// ===== CLOUD SYNC ON LOAD =====
+async function syncFromCloud() {
+  if (!cloudReady) return;
+  try {
+    const [cloudCourses, cloudPortal, cloudUser] = await Promise.all([
+      cloudLoadContent(),
+      cloudLoadPortal(),
+      STATE.userId ? cloudLoadUser(STATE.userId) : null
+    ]);
+    if (cloudCourses && cloudCourses.length) STATE.courses = cloudCourses;
+    else cloudSaveContent(STATE.courses);
+
+    if (cloudPortal && cloudPortal.length) STATE.portal = cloudPortal;
+    else cloudSavePortal(STATE.portal);
+
+    if (cloudUser) {
+      STATE.xp = cloudUser.xp ?? STATE.xp;
+      STATE.badges = cloudUser.badges ?? STATE.badges;
+      STATE.streak = cloudUser.streak ?? STATE.streak;
+      STATE.lastActiveDate = cloudUser.lastActiveDate ?? STATE.lastActiveDate;
+      STATE.progress = cloudUser.progress ?? STATE.progress;
+      if (cloudUser.name) STATE.userName = cloudUser.name;
+    }
+    Storage.save(STATE);
+  } catch (e) { console.warn("syncFromCloud failed:", e); }
+}
+
+// ===== SCREENS: курсы =====
 function renderTopStats() {
   const lvl = levelForXp(STATE.xp);
   const next = xpForNextLevel(STATE.xp);
@@ -196,6 +276,7 @@ function renderCourseList() {
       <h1>Курсы</h1>
       ${STATE.editMode ? `<button class="btn-ghost" data-add-course>+ Курс</button>` : ""}
     </div>
+    <div class="hello-row">Здравствуйте, ${escapeHtml(STATE.userName)}${cloudReady ? '<span class="sync-dot" title="Синхронизировано">●</span>' : ""}</div>
     <div class="course-list">${cards}</div>
   `;
 }
@@ -214,7 +295,7 @@ function renderCourseDetail(courseId) {
       <div class="station ${stateClass} ${critical ? "critical" : ""}" ${locked ? "" : `data-open-module="${m.id}"`}>
         <div class="station-dot">${done ? "✓" : (locked ? "🔒" : (m.type === "quiz" ? "?" : "•"))}</div>
         <div class="station-label">
-          <div class="station-title">${escapeHtml(m.title)} ${critical ? '<span class="crit-flag">крит.</span>' : ""}</div>
+          <div class="station-title">${escapeHtml(m.title)} ${critical ? '<span class="crit-flag">крит.</span>' : ""} ${m.isFinalExam ? '<span class="crit-flag" style="background:rgba(255,107,53,.15);color:var(--accent)">экзамен</span>' : ""}</div>
           <div class="station-meta">${m.type === "quiz" ? (qr ? `Результат: ${qr.score}/${qr.total}` : (m.questions.length + " вопр.")) : "Урок"}</div>
         </div>
         ${STATE.editMode ? `<button class="icon-btn" data-edit-module="${courseId}|${m.id}">✏️</button>` : ""}
@@ -258,10 +339,57 @@ function renderQuiz(courseId, moduleId) {
       <button class="back-btn" data-back-course="${courseId}">‹</button>
       <h1>${escapeHtml(m.title)}</h1>
     </div>
+    ${m.isFinalExam ? `<div class="demo-banner">Итоговый экзамен: проходной балл 85%, критические вопросы (ОТ/ХАССП/стоп-факторы) — только 100%. Результат передаётся наставнику.</div>` : ""}
     <form id="quiz-form">
       ${qs}
       <button type="submit" class="btn-primary btn-block">Проверить ответы</button>
     </form>
+  `;
+}
+
+// ===== SCREENS: информационный портал =====
+function renderPortalList() {
+  const cats = {};
+  STATE.portal.forEach(a => { (cats[a.category] = cats[a.category] || []).push(a); });
+  const blocks = Object.keys(cats).map(cat => `
+    <h2 class="section-title">${escapeHtml(cat)}</h2>
+    <div class="course-list">
+      ${cats[cat].map(a => `
+        <div class="course-card portal-card" data-open-article="${a.id}">
+          <div class="course-icon">${a.icon || "📄"}</div>
+          <div class="course-info">
+            <div class="course-title">${escapeHtml(a.title)}</div>
+            <div class="course-sub">${escapeHtml(a.summary || "")}</div>
+          </div>
+          ${STATE.editMode ? `<button class="icon-btn" data-edit-article="${a.id}">✏️</button>` : `<div class="chev">›</div>`}
+        </div>`).join("")}
+    </div>
+  `).join("");
+  return `
+    <div class="screen-header">
+      <h1>Портал</h1>
+      ${STATE.editMode ? `<button class="btn-ghost" data-add-article>+ Материал</button>` : ""}
+    </div>
+    <p class="hint" style="text-align:left;margin-bottom:6px;">Справочные материалы, чек-листы и регламенты — не курсы, а быстрый поиск нужной информации.</p>
+    ${blocks || `<p class="hint">Материалов пока нет.</p>`}
+  `;
+}
+
+function renderArticle(articleId) {
+  const a = STATE.portal.find(x => x.id === articleId);
+  if (!a) return renderPortalList();
+  const paragraphs = a.body.split("\n\n").map(t => {
+    if (t.startsWith("- ")) {
+      return "<ul>" + t.split("\n").map(li => `<li>${escapeHtml(li.replace(/^- /, ""))}</li>`).join("") + "</ul>";
+    }
+    return `<p>${escapeHtml(t)}</p>`;
+  }).join("");
+  return `
+    <div class="screen-header">
+      <button class="back-btn" data-back-portal>‹</button>
+      <h1>${escapeHtml(a.title)}</h1>
+    </div>
+    <div class="lesson-body">${paragraphs}</div>
   `;
 }
 
@@ -274,6 +402,7 @@ function renderProfile() {
   return `
     ${renderTopStats()}
     <div class="screen-header"><h1>Профиль</h1></div>
+    <div class="hello-row">${escapeHtml(STATE.userName)} · ${cloudReady ? "прогресс синхронизирован" : "локальный режим (без общего облака)"}</div>
     <div class="profile-stats">
       <div class="stat"><div class="stat-num">${STATE.xp}</div><div class="stat-label">Опыт (XP)</div></div>
       <div class="stat"><div class="stat-num">${lvl}</div><div class="stat-label">Уровень</div></div>
@@ -281,13 +410,93 @@ function renderProfile() {
     </div>
     <h2 class="section-title">Значки</h2>
     <div class="badge-grid">${badgeGrid}</div>
-    <h2 class="section-title">Режим редактирования</h2>
+    <h2 class="section-title">Режим администратора</h2>
     <div class="edit-toggle-row">
-      <span>${STATE.editMode ? "Включён — можно редактировать курсы" : "Выключен"}</span>
+      <span>${STATE.editMode ? "Включён — редактирование и просмотр всех пользователей" : "Выключен"}</span>
       <button class="btn-ghost" data-toggle-edit>${STATE.editMode ? "Выключить" : "Включить"}</button>
     </div>
-    <button class="btn-ghost btn-block" data-reset style="margin-top:24px;color:var(--danger)">Сбросить прогресс</button>
+    ${STATE.editMode ? `<button class="btn-ghost btn-block" data-goto-admin style="margin-top:10px;">📊 Прогресс всех пользователей</button>` : ""}
+    <button class="btn-ghost btn-block" data-reset style="margin-top:24px;color:var(--danger)">Сбросить мой прогресс</button>
   `;
+}
+
+// ===== ADMIN: прогресс всех пользователей =====
+function renderAdminLoading() {
+  return `
+    <div class="screen-header">
+      <button class="back-btn" data-back>‹</button>
+      <h1>Прогресс пользователей</h1>
+    </div>
+    <div id="admin-body"><p class="hint">Загрузка…</p></div>
+  `;
+}
+
+async function loadAndRenderAdmin() {
+  const body = document.getElementById("admin-body");
+  if (!body) return;
+  if (!cloudReady) {
+    body.innerHTML = `<p class="hint">Облако не подключено, поэтому видно только это устройство.<br><br>Чтобы видеть прогресс всех пользователей, настройте Firebase — см. README_установка.md.</p>`;
+    return;
+  }
+  const users = await cloudLoadAllUsers();
+  if (!users.length) { body.innerHTML = `<p class="hint">Пока никто не начал обучение.</p>`; return; }
+
+  users.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  const rows = users.map(u => {
+    const lvl = levelForXp(u.xp || 0);
+    const courseSummaries = STATE.courses.map(c => {
+      const p = (u.progress && u.progress[c.id]) || { completedModules: [] };
+      const done = c.modules.filter(m => p.completedModules.includes(m.id)).length;
+      return `${escapeHtml(c.icon)} ${done}/${c.modules.length}`;
+    }).join(" · ");
+    const lastSeen = u.updatedAt ? new Date(u.updatedAt).toLocaleString("ru-RU") : "—";
+    return `
+      <div class="admin-user-card" data-user-detail="${u.id}">
+        <div class="admin-user-top">
+          <span class="admin-user-name">${escapeHtml(u.name || "Без имени")}</span>
+          <span class="lvl-badge small">Ур. ${lvl}</span>
+        </div>
+        <div class="admin-user-meta">${courseSummaries}</div>
+        <div class="admin-user-meta dim">${u.xp || 0} XP · 🔥 ${u.streak || 0} · значков: ${(u.badges || []).length} · был(а): ${lastSeen}</div>
+      </div>`;
+  }).join("");
+
+  body.innerHTML = `<div class="admin-list">${rows}</div>`;
+  document.querySelectorAll("[data-user-detail]").forEach(el => el.addEventListener("click", () => {
+    const u = users.find(x => x.id === el.dataset.userDetail);
+    showUserDetail(u);
+  }));
+}
+
+function showUserDetail(u) {
+  const modal = document.getElementById("modal");
+  const courseBlocks = STATE.courses.map(c => {
+    const p = (u.progress && u.progress[c.id]) || { completedModules: [], quizResults: {} };
+    const moduleRows = c.modules.map(m => {
+      const done = p.completedModules.includes(m.id);
+      const qr = m.type === "quiz" ? p.quizResults[m.id] : null;
+      let status = done ? "✓" : "—";
+      let detail = "";
+      if (qr) detail = `${qr.score}/${qr.total}${qr.criticalOk === false ? " ⚠️ критич. ошибка" : ""}`;
+      return `<div class="admin-mod-row"><span>${status} ${escapeHtml(m.title)}</span><span class="dim">${detail}</span></div>`;
+    }).join("");
+    return `<div class="admin-course-block"><div class="admin-course-title">${c.icon} ${escapeHtml(c.title)}</div>${moduleRows}</div>`;
+  }).join("");
+
+  modal.innerHTML = `
+    <div class="modal-card modal-card-wide">
+      <h2>${escapeHtml(u.name || "Без имени")}</h2>
+      <p class="hint" style="text-align:left;margin-bottom:14px;">XP: ${u.xp || 0} · Уровень: ${levelForXp(u.xp || 0)} · Серия: ${u.streak || 0} дн. · Значков: ${(u.badges || []).length}</p>
+      ${courseBlocks}
+      <div class="modal-actions" style="margin-top:14px;">
+        <button class="btn-ghost" data-export-user="${u.id}">📤 Выгрузить в Таблицу</button>
+        <button class="btn-primary" data-close-modal>Закрыть</button>
+      </div>
+    </div>`;
+  modal.classList.add("show");
+  modal.querySelector("[data-close-modal]").addEventListener("click", closeModal);
+  modal.querySelector("[data-export-user]").addEventListener("click", () => exportUserToSheets(u));
 }
 
 function escapeHtml(s) {
@@ -301,13 +510,19 @@ function attachHandlers(page) {
 
   document.querySelectorAll("[data-back]").forEach(el => el.addEventListener("click", () => nav("courses")));
   document.querySelectorAll("[data-back-course]").forEach(el => el.addEventListener("click", () => nav("course/" + el.dataset.backCourse)));
+  document.querySelectorAll("[data-back-portal]").forEach(el => el.addEventListener("click", () => nav("portal")));
 
   document.querySelectorAll("[data-open-module]").forEach(el => el.addEventListener("click", e => {
     if (e.target.closest("[data-edit-module]")) return;
-    const [page0, courseId] = currentRoute();
+    const [, courseId] = currentRoute();
     const moduleId = el.dataset.openModule;
     const m = getModule(courseId, moduleId);
     nav((m.type === "quiz" ? "quiz/" : "lesson/") + courseId + "/" + moduleId);
+  }));
+
+  document.querySelectorAll("[data-open-article]").forEach(el => el.addEventListener("click", e => {
+    if (e.target.closest("[data-edit-article]")) return;
+    nav("article/" + el.dataset.openArticle);
   }));
 
   document.querySelectorAll("[data-complete-lesson]").forEach(el => el.addEventListener("click", () => {
@@ -334,11 +549,17 @@ function attachHandlers(page) {
   document.querySelectorAll(".navbtn").forEach(el => el.addEventListener("click", () => nav(el.dataset.page)));
 
   document.querySelectorAll("[data-toggle-edit]").forEach(el => el.addEventListener("click", toggleEditMode));
+  document.querySelectorAll("[data-goto-admin]").forEach(el => el.addEventListener("click", () => nav("admin")));
   document.querySelectorAll("[data-reset]").forEach(el => el.addEventListener("click", () => {
-    if (confirm("Сбросить весь прогресс, XP и значки?")) { STATE = defaultState(); persist(); render(); }
+    if (confirm("Сбросить ваш прогресс, XP и значки? (Курсы и портал останутся)")) {
+      const keepName = STATE.userName, keepId = STATE.userId, keepCourses = STATE.courses, keepPortal = STATE.portal;
+      STATE = defaultState();
+      STATE.userName = keepName; STATE.userId = keepId; STATE.courses = keepCourses; STATE.portal = keepPortal;
+      persist(); render();
+    }
   }));
 
-  document.querySelectorAll("[data-add-course]").forEach(el => el.addEventListener("click", openCourseEditor));
+  document.querySelectorAll("[data-add-course]").forEach(el => el.addEventListener("click", () => openCourseEditor()));
   document.querySelectorAll("[data-edit-course]").forEach(el => el.addEventListener("click", e => { e.stopPropagation(); openCourseEditor(el.dataset.editCourse); }));
   document.querySelectorAll("[data-add-module]").forEach(el => el.addEventListener("click", () => openModuleEditor(el.dataset.addModule)));
   document.querySelectorAll("[data-edit-module]").forEach(el => el.addEventListener("click", e => {
@@ -346,6 +567,9 @@ function attachHandlers(page) {
     const [courseId, moduleId] = el.dataset.editModule.split("|");
     openModuleEditor(courseId, moduleId);
   }));
+
+  document.querySelectorAll("[data-add-article]").forEach(el => el.addEventListener("click", () => openArticleEditor()));
+  document.querySelectorAll("[data-edit-article]").forEach(el => el.addEventListener("click", e => { e.stopPropagation(); openArticleEditor(el.dataset.editArticle); }));
 }
 
 function showQuizResult(courseId, moduleId, r) {
@@ -368,7 +592,7 @@ function showQuizResult(courseId, moduleId, r) {
 
 function toggleEditMode() {
   if (!STATE.editMode) {
-    const pin = prompt("Введите PIN редактора (по умолчанию 1234):");
+    const pin = prompt("Введите PIN администратора (по умолчанию 1234):");
     if (pin !== "1234") { toast("Неверный PIN", "warn"); return; }
   }
   STATE.editMode = !STATE.editMode;
@@ -376,7 +600,7 @@ function toggleEditMode() {
   render();
 }
 
-// ===== EDIT MODALS =====
+// ===== EDIT MODALS: курсы и модули =====
 function openCourseEditor(courseId) {
   const c = courseId ? getCourse(courseId) : null;
   const modal = document.getElementById("modal");
@@ -403,14 +627,14 @@ function openCourseEditor(courseId) {
     } else {
       STATE.courses.push({ id: "c" + Date.now(), title, subtitle: document.getElementById("f-sub").value.trim(), icon: document.getElementById("f-icon").value.trim() || "📘", color: document.getElementById("f-color").value, modules: [] });
     }
-    persist(); closeModal(); render();
+    persistContent(); closeModal(); render();
   });
   const delBtn = modal.querySelector("[data-del-course]");
   if (delBtn) delBtn.addEventListener("click", () => {
     if (confirm("Удалить курс со всеми модулями?")) {
       STATE.courses = STATE.courses.filter(x => x.id !== c.id);
       delete STATE.progress[c.id];
-      persist(); closeModal(); nav("courses");
+      persistContent(); closeModal(); nav("courses");
     }
   });
 }
@@ -430,6 +654,7 @@ function openModuleEditor(courseId, moduleId) {
           <option value="quiz" ${type === "quiz" ? "selected" : ""}>Тест</option>
         </select>
       </label>
+      <label><input type="checkbox" id="f-final-exam" ${m && m.isFinalExam ? "checked" : ""} style="width:auto;display:inline-block;margin-right:6px;">Это итоговый экзамен (результат уходит в Таблицу)</label>
       <div id="f-lesson-fields" style="${type === "lesson" ? "" : "display:none"}">
         <label>Текст урока (абзацы через пустую строку)<textarea id="f-body" rows="6">${m && m.type === "lesson" ? escapeHtml(m.body) : ""}</textarea></label>
       </div>
@@ -456,14 +681,15 @@ function openModuleEditor(courseId, moduleId) {
     const title = document.getElementById("f-mtitle").value.trim();
     if (!title) { toast("Укажите название", "warn"); return; }
     const mtype = typeSel.value;
+    const isFinalExam = document.getElementById("f-final-exam").checked;
     let newMod;
     if (mtype === "lesson") {
-      newMod = { id: m ? m.id : "mod" + Date.now(), type: "lesson", title, body: document.getElementById("f-body").value.trim() };
+      newMod = { id: m ? m.id : "mod" + Date.now(), type: "lesson", title, body: document.getElementById("f-body").value.trim(), isFinalExam };
     } else {
       let questions;
       try { questions = JSON.parse(document.getElementById("f-questions").value); }
       catch (e) { toast("Ошибка в JSON вопросов", "warn"); return; }
-      newMod = { id: m ? m.id : "mod" + Date.now(), type: "quiz", title, questions };
+      newMod = { id: m ? m.id : "mod" + Date.now(), type: "quiz", title, questions, isFinalExam };
     }
     if (m) {
       const idx = c.modules.findIndex(x => x.id === m.id);
@@ -471,14 +697,60 @@ function openModuleEditor(courseId, moduleId) {
     } else {
       c.modules.push(newMod);
     }
-    persist(); closeModal(); render();
+    persistContent(); closeModal(); render();
   });
 
   const delBtn = modal.querySelector("[data-del-module]");
   if (delBtn) delBtn.addEventListener("click", () => {
     if (confirm("Удалить модуль?")) {
       c.modules = c.modules.filter(x => x.id !== m.id);
-      persist(); closeModal(); nav("course/" + courseId);
+      persistContent(); closeModal(); nav("course/" + courseId);
+    }
+  });
+}
+
+// ===== EDIT MODALS: портал =====
+function openArticleEditor(articleId) {
+  const a = articleId ? STATE.portal.find(x => x.id === articleId) : null;
+  const modal = document.getElementById("modal");
+  modal.innerHTML = `
+    <div class="modal-card modal-card-wide">
+      <h2>${a ? "Редактировать материал" : "Новый материал"}</h2>
+      <label>Категория<input id="f-cat" value="${a ? escapeHtml(a.category) : "Общее"}"></label>
+      <label>Название<input id="f-atitle" value="${a ? escapeHtml(a.title) : ""}"></label>
+      <label>Иконка (эмодзи)<input id="f-aicon" value="${a ? a.icon : "📄"}"></label>
+      <label>Краткое описание<input id="f-asummary" value="${a ? escapeHtml(a.summary || "") : ""}"></label>
+      <label>Текст (абзацы через пустую строку; список — строки, начинающиеся с "- ")<textarea id="f-abody" rows="8">${a ? escapeHtml(a.body) : ""}</textarea></label>
+      <div class="modal-actions">
+        ${a ? `<button class="btn-ghost" style="color:var(--danger)" data-del-article="${a.id}">Удалить</button>` : ""}
+        <button class="btn-primary" data-save-article="${a ? a.id : ""}">Сохранить</button>
+      </div>
+    </div>`;
+  modal.classList.add("show");
+  modal.querySelector("[data-save-article]").addEventListener("click", () => {
+    const title = document.getElementById("f-atitle").value.trim();
+    if (!title) { toast("Укажите название", "warn"); return; }
+    const data = {
+      id: a ? a.id : "art" + Date.now(),
+      category: document.getElementById("f-cat").value.trim() || "Общее",
+      title,
+      icon: document.getElementById("f-aicon").value.trim() || "📄",
+      summary: document.getElementById("f-asummary").value.trim(),
+      body: document.getElementById("f-abody").value.trim()
+    };
+    if (a) {
+      const idx = STATE.portal.findIndex(x => x.id === a.id);
+      STATE.portal[idx] = data;
+    } else {
+      STATE.portal.push(data);
+    }
+    persistContent(); closeModal(); render();
+  });
+  const delBtn = modal.querySelector("[data-del-article]");
+  if (delBtn) delBtn.addEventListener("click", () => {
+    if (confirm("Удалить материал?")) {
+      STATE.portal = STATE.portal.filter(x => x.id !== a.id);
+      persistContent(); closeModal(); nav("portal");
     }
   });
 }
@@ -488,8 +760,45 @@ function closeModal() {
   modal.classList.remove("show"); modal.innerHTML = "";
 }
 
+// ===== GOOGLE SHEETS EXPORT =====
+async function exportUserToSheets(u) {
+  if (typeof SHEETS_WEBHOOK_URL === "undefined" || !SHEETS_WEBHOOK_URL) {
+    toast("Таблица не подключена — см. README", "warn");
+    return;
+  }
+  const rows = [];
+  STATE.courses.forEach(c => {
+    const p = (u.progress && u.progress[c.id]) || { completedModules: [], quizResults: {} };
+    c.modules.filter(m => m.type === "quiz").forEach(m => {
+      const qr = p.quizResults[m.id];
+      if (qr) rows.push({
+        name: u.name || "", course: c.title, module: m.title,
+        score: qr.score, total: qr.total, criticalOk: qr.criticalOk, date: qr.at ? new Date(qr.at).toISOString() : ""
+      });
+    });
+  });
+  if (!rows.length) { toast("У пользователя пока нет результатов тестов", "warn"); return; }
+  try {
+    await fetch(SHEETS_WEBHOOK_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ rows }) });
+    toast("Отправлено в Таблицу", "badge");
+  } catch (e) { console.warn(e); toast("Не удалось отправить в Таблицу", "warn"); }
+}
+
+async function sendExamToSheets(courseId, moduleId, result) {
+  if (typeof SHEETS_WEBHOOK_URL === "undefined" || !SHEETS_WEBHOOK_URL) return;
+  const c = getCourse(courseId); const m = getModule(courseId, moduleId);
+  try {
+    await fetch(SHEETS_WEBHOOK_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({
+      rows: [{ name: STATE.userName, course: c.title, module: m.title, score: result.score, total: result.total, criticalOk: result.criticalOk, date: new Date().toISOString() }]
+    }) });
+  } catch (e) { console.warn(e); }
+}
+
 // ===== INIT =====
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  initCloud();
   document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
+  render();
+  if (STATE.userId) await syncFromCloud();
   render();
 });
