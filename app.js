@@ -412,11 +412,13 @@ function renderProfile() {
     <div class="badge-grid">${badgeGrid}</div>
     <h2 class="section-title">Режим администратора</h2>
     <div class="edit-toggle-row">
-      <span>${STATE.editMode ? "Включён — редактирование и просмотр всех пользователей" : "Выключен"}</span>
+      <span>${STATE.editMode ? ("Включён" + (currentAdmin ? " — вход как " + escapeHtml(currentAdmin.email) : " (локально, без входа)")) : "Выключен"}</span>
       <button class="btn-ghost" data-toggle-edit>${STATE.editMode ? "Выключить" : "Включить"}</button>
     </div>
+    ${!cloudReady || !authReady ? `<p class="hint" style="text-align:left;margin-top:8px;">Вход администратора не настроен — используется временный PIN-код. Для защищённого входа по email настройте Firebase Authentication (см. README).</p>` : ""}
     ${STATE.editMode ? `<button class="btn-ghost btn-block" data-goto-admin style="margin-top:10px;">📊 Прогресс всех пользователей</button>` : ""}
     <button class="btn-ghost btn-block" data-reset style="margin-top:24px;color:var(--danger)">Сбросить мой прогресс</button>
+    <button class="btn-ghost btn-block" data-logout-user style="margin-top:10px;">🚪 Выйти из профиля (сменить пользователя)</button>
   `;
 }
 
@@ -559,6 +561,8 @@ function attachHandlers(page) {
     }
   }));
 
+  document.querySelectorAll("[data-logout-user]").forEach(el => el.addEventListener("click", logoutUser));
+
   document.querySelectorAll("[data-add-course]").forEach(el => el.addEventListener("click", () => openCourseEditor()));
   document.querySelectorAll("[data-edit-course]").forEach(el => el.addEventListener("click", e => { e.stopPropagation(); openCourseEditor(el.dataset.editCourse); }));
   document.querySelectorAll("[data-add-module]").forEach(el => el.addEventListener("click", () => openModuleEditor(el.dataset.addModule)));
@@ -590,14 +594,77 @@ function showQuizResult(courseId, moduleId, r) {
   });
 }
 
-function toggleEditMode() {
-  if (!STATE.editMode) {
-    const pin = prompt("Введите PIN администратора (по умолчанию 1234):");
-    if (pin !== "1234") { toast("Неверный PIN", "warn"); return; }
-  }
-  STATE.editMode = !STATE.editMode;
-  persist();
+function logoutUser() {
+  const msg = cloudReady
+    ? "Выйти из профиля? Ваш прогресс сохранён в облаке под именем «" + STATE.userName + "» и виден администратору. На этом устройстве откроется экран входа для нового пользователя."
+    : "Выйти из профиля? Прогресс на этом устройстве без облака не связан с именем — при следующем входе под тем же именем начнётся заново.";
+  if (!confirm(msg)) return;
+  if (authReady && currentAdmin) adminSignOut();
+  const keepCourses = STATE.courses, keepPortal = STATE.portal;
+  STATE = defaultState();
+  STATE.courses = keepCourses; STATE.portal = keepPortal;
+  Storage.save(STATE);
   render();
+}
+
+function toggleEditMode() {
+  if (STATE.editMode) {
+    // выключение: если вошли через Firebase — полноценный выход, иначе просто снимаем локальный флаг
+    if (authReady && currentAdmin) { adminSignOut(); }
+    STATE.editMode = false;
+    persist(); render();
+    return;
+  }
+  if (cloudReady && authReady) {
+    openAdminLogin();
+  } else {
+    // облако/вход не настроены — временный локальный PIN (см. предупреждение в профиле)
+    const pin = prompt("Вход администратора не настроен (см. README). Временный PIN (по умолчанию 1234):");
+    if (pin !== "1234") { toast("Неверный PIN", "warn"); return; }
+    STATE.editMode = true;
+    persist(); render();
+  }
+}
+
+function openAdminLogin() {
+  const modal = document.getElementById("modal");
+  modal.innerHTML = `
+    <div class="modal-card">
+      <h2>Вход администратора</h2>
+      <label>Email<input id="f-admin-email" type="email" autocomplete="username"></label>
+      <label>Пароль<input id="f-admin-pass" type="password" autocomplete="current-password"></label>
+      <p class="hint" id="admin-login-error" style="color:var(--danger);text-align:left;"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close-modal>Отмена</button>
+        <button class="btn-primary" data-do-admin-login>Войти</button>
+      </div>
+    </div>`;
+  modal.classList.add("show");
+  modal.querySelector("[data-close-modal]").addEventListener("click", closeModal);
+  const go = async () => {
+    const email = document.getElementById("f-admin-email").value.trim();
+    const pass = document.getElementById("f-admin-pass").value;
+    const errEl = document.getElementById("admin-login-error");
+    if (!email || !pass) { errEl.textContent = "Заполните email и пароль"; return; }
+    errEl.textContent = "Проверка…";
+    const res = await adminSignIn(email, pass);
+    if (!res.ok) { errEl.textContent = res.error; return; }
+    closeModal();
+    // STATE.editMode проставится автоматически через onAdminAuthChange
+  };
+  modal.querySelector("[data-do-admin-login]").addEventListener("click", go);
+  modal.querySelector("#f-admin-pass").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+}
+
+// Вызывается из cloud.js при изменении статуса входа Firebase Auth
+function onAdminAuthChange(user) {
+  const wasEdit = STATE.editMode;
+  STATE.editMode = !!user;
+  if (STATE.editMode !== wasEdit) {
+    persist();
+    if (document.getElementById("app")) render();
+    if (user) toast("Вход выполнен: " + user.email, "badge");
+  }
 }
 
 // ===== EDIT MODALS: курсы и модули =====
