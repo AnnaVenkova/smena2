@@ -19,6 +19,49 @@ function initCloud() {
     console.warn("Firebase init failed:", e);
     cloudReady = false;
   }
+  initAuth();
+}
+
+// ===== ADMIN AUTH (Firebase Authentication — вход по email/паролю) =====
+let _auth = null;
+let authReady = false;
+let currentAdmin = null;
+
+function initAuth() {
+  if (!cloudReady || typeof firebase === "undefined" || !firebase.auth) { authReady = false; return; }
+  try {
+    _auth = firebase.auth();
+    authReady = true;
+    _auth.onAuthStateChanged(user => {
+      currentAdmin = user;
+      if (typeof onAdminAuthChange === "function") onAdminAuthChange(user);
+    });
+  } catch (e) {
+    console.warn("Firebase auth init failed:", e);
+    authReady = false;
+  }
+}
+
+async function adminSignIn(email, password) {
+  if (!authReady) return { ok: false, error: "Вход не настроен (см. README)" };
+  try {
+    await _auth.signInWithEmailAndPassword(email, password);
+    return { ok: true };
+  } catch (e) {
+    const messages = {
+      "auth/invalid-email": "Некорректный email",
+      "auth/user-not-found": "Такой пользователь не найден",
+      "auth/wrong-password": "Неверный пароль",
+      "auth/invalid-credential": "Неверный email или пароль",
+      "auth/too-many-requests": "Слишком много попыток, попробуйте позже"
+    };
+    return { ok: false, error: messages[e.code] || e.message };
+  }
+}
+
+async function adminSignOut() {
+  if (!authReady) return;
+  try { await _auth.signOut(); } catch (e) { console.warn(e); }
 }
 
 async function cloudLoadContent() {
