@@ -12,7 +12,7 @@
 // 5. Скопируйте появившийся URL (заканчивается на /exec) и вставьте его вместо null ниже.
 // 6. Сохраните файл, закоммитьте и запушьте в GitHub.
 
-const SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxzmWwyTVfDNEMQoMYIB5cB1huEnJSQPwNeL3efMSVywemsxi1TaPSShJ4a2nIb5Wp6/exec";
+const SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzaEyVR2YD7YOA7NE2vCv67NEvw8j95A4gUDPVHfk-R3T30ezl6OfBwAexCCHY_7Q60/exec";
 
 // Пример после заполнения:
 // const SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycb.../exec";
