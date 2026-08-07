@@ -1,31 +1,39 @@
 // Код для Google Apps Script (Расширения → Apps Script в вашей Google Таблице).
 // Замените содержимое редактора на этот код целиком, затем разверните как Web App
 // (см. инструкцию в sheets-config.js).
+//
+// Данные приходят через GET-запрос (в адресе, параметр data) — это сделано
+// специально, чтобы избежать известной проблемы Apps Script: адрес /exec
+// сначала отвечает переадресацией, и при ней браузер иногда теряет тело
+// POST-запроса. У GET такой проблемы нет.
 
-function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Результаты")
-    || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-
-  var data = JSON.parse(e.postData.contents);
-  var rows = data.rows || [];
-
-  rows.forEach(function (r) {
-    sheet.appendRow([
-      r.name || "",
-      r.course || "",
-      r.module || "",
-      r.score,
-      r.total,
-      r.criticalOk === false ? "Нет" : "Да",
-      r.date || new Date().toISOString()
-    ]);
-  });
-
-  return ContentService.createTextOutput(JSON.stringify({ status: "ok", added: rows.length }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// Необязательно: проверка, что скрипт вообще отвечает (откройте URL /exec в браузере)
 function doGet(e) {
-  return ContentService.createTextOutput("Смена+ webhook работает. Отправляйте POST-запросы.");
+  try {
+    if (!e.parameter.data) {
+      return ContentService.createTextOutput("Смена+ webhook работает. Ждём параметр data.");
+    }
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Результаты")
+      || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+
+    var payload = JSON.parse(e.parameter.data);
+    var rows = payload.rows || [];
+
+    rows.forEach(function (r) {
+      sheet.appendRow([
+        r.name || "",
+        r.course || "",
+        r.module || "",
+        r.score,
+        r.total,
+        r.criticalOk === false ? "Нет" : "Да",
+        r.date || new Date().toISOString()
+      ]);
+    });
+
+    return ContentService.createTextOutput(JSON.stringify({ status: "ok", added: rows.length }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }

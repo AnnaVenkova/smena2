@@ -828,6 +828,16 @@ function closeModal() {
 }
 
 // ===== GOOGLE SHEETS EXPORT =====
+// Отправляем через GET (данные в параметре URL), а не POST — Apps Script на
+// адресе /exec сначала отвечает переадресацией, и при ней браузер иногда
+// теряет тело POST-запроса. У GET-запроса такой проблемы нет: данные едут
+// прямо в адресе и не зависят от переадресации.
+function sheetsSend(rows) {
+  if (typeof SHEETS_WEBHOOK_URL === "undefined" || !SHEETS_WEBHOOK_URL) return Promise.resolve(false);
+  const url = SHEETS_WEBHOOK_URL + "?data=" + encodeURIComponent(JSON.stringify({ rows }));
+  return fetch(url, { method: "GET", mode: "no-cors" }).then(() => true).catch(e => { console.warn(e); return false; });
+}
+
 async function exportUserToSheets(u) {
   if (typeof SHEETS_WEBHOOK_URL === "undefined" || !SHEETS_WEBHOOK_URL) {
     toast("Таблица не подключена — см. README", "warn");
@@ -845,20 +855,14 @@ async function exportUserToSheets(u) {
     });
   });
   if (!rows.length) { toast("У пользователя пока нет результатов тестов", "warn"); return; }
-  try {
-    await fetch(SHEETS_WEBHOOK_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ rows }) });
-    toast("Отправлено в Таблицу", "badge");
-  } catch (e) { console.warn(e); toast("Не удалось отправить в Таблицу", "warn"); }
+  const ok = await sheetsSend(rows);
+  toast(ok ? "Отправлено в Таблицу" : "Не удалось отправить в Таблицу", ok ? "badge" : "warn");
 }
 
 async function sendExamToSheets(courseId, moduleId, result) {
   if (typeof SHEETS_WEBHOOK_URL === "undefined" || !SHEETS_WEBHOOK_URL) return;
   const c = getCourse(courseId); const m = getModule(courseId, moduleId);
-  try {
-    await fetch(SHEETS_WEBHOOK_URL, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({
-      rows: [{ name: STATE.userName, course: c.title, module: m.title, score: result.score, total: result.total, criticalOk: result.criticalOk, date: new Date().toISOString() }]
-    }) });
-  } catch (e) { console.warn(e); }
+  await sheetsSend([{ name: STATE.userName, course: c.title, module: m.title, score: result.score, total: result.total, criticalOk: result.criticalOk, date: new Date().toISOString() }]);
 }
 
 // ===== INIT =====
