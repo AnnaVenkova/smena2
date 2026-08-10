@@ -5,8 +5,8 @@
   --surface: #1F232B;
   --surface-2: #262B35;
   --border: #333947;
-  --text: #abe5a2;
-  --text-dim: #9AA0AC;
+  --text: #f3fbf2;
+  --text-dim: #93de87;
   --accent: #abe5a2;
   --accent-2: #abe5a2;
   --success: #1FB6A6;
@@ -167,7 +167,7 @@ h1, h2, .display {
   padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   max-width: 480px; margin: 0 auto;
 }
-.navbtn { flex: 1; background: none; border: none; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; cursor: pointer; padding: 6px; font-family: 'Inter', sans-serif; }
+.navbtn { flex: 1; background: none; border: none; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; cursor: pointer; padding: 6px; font-family: inherit; }
 .navbtn .navicon { font-size: 19px; }
 .navbtn.active { color: var(--heading-color); }
 
