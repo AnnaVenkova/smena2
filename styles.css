@@ -25,8 +25,16 @@
   --badge-color: #387d2d;
   --label-color: #387d2d;
 
-  /* Card / surface text */
-  --card-text: var(--text);
+  /* Card / surface tokens (light / dark variants) */
+  --card-bg-dark: var(--surface);
+  --card-border-dark: var(--border);
+  --card-text-dark: var(--text);
+
+  --card-bg-light: #f3fbf2; /* светлая карточка (можно подобрать) */
+  --card-border-light: #e6efe5;
+  --card-text-light: #16181D;
+
+  --card-text: var(--card-text-dark);
   --card-text-dim: var(--text-dim);
 
   --accent: #abe5a2;
@@ -104,9 +112,9 @@ h1, h2, .display {
 .course-list { display: flex; flex-direction: column; gap: 12px; }
 .course-card {
   display: flex; align-items: center; gap: 14px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--card-bg-dark); border: 1px solid var(--card-border-dark); border-radius: var(--radius);
   padding: 14px; cursor: pointer; position: relative; overflow: hidden;
-  color: var(--card-text);
+  color: var(--card-text-dark);
 }
 .course-card::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--accent);
@@ -120,13 +128,17 @@ h1, h2, .display {
 .course-progress-label { font-size: 11px; color: var(--card-text-dim); margin-top: 4px; }
 .chev { font-size: 22px; color: var(--card-text-dim); }
 
+/* light card modifier */
+.card--light { background: var(--card-bg-light) !important; border-color: var(--card-border-light) !important; color: var(--card-text-light) !important; }
+.card--light .course-sub, .card--light .course-progress-label, .card--light .chev { color: var(--card-text-dim); }
+
 /* ===== Conveyor belt (signature element) ===== */
 .belt { position: relative; padding: 8px 4px 30px; }
 .station {
   display: flex; align-items: center; gap: 14px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  background: var(--card-bg-dark); border: 1px solid var(--card-border-dark); border-radius: 14px;
   padding: 12px 14px; margin-bottom: 0; cursor: pointer; position: relative;
-  color: var(--card-text);
+  color: var(--card-text-dark);
 }
 .station.locked { opacity: 0.45; cursor: not-allowed; }
 .station.done { border-color: var(--success); }
@@ -153,12 +165,12 @@ h1, h2, .display {
 .icon-btn { background: none; border: none; color: var(--card-text-dim); font-size: 16px; cursor: pointer; padding: 6px; flex-shrink: 0; }
 
 /* ===== Lesson ===== */
-.lesson-body { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 18px; color: var(--card-text); }
+.lesson-body { background: var(--card-bg-dark); border: 1px solid var(--card-border-dark); border-radius: var(--radius); padding: 18px; margin-bottom: 18px; color: var(--card-text-dark); }
 .lesson-body p { line-height: 1.6; font-size: 14.5px; margin: 0 0 14px; white-space: pre-wrap; }
 .lesson-body p:last-child { margin-bottom: 0; }
 
 /* ===== Quiz ===== */
-.q-block { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.q-block { background: var(--card-bg-dark); border: 1px solid var(--card-border-dark); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
 .q-text { font-weight: 600; font-size: 14.5px; margin-bottom: 12px; }
 .q-options { display: flex; flex-direction: column; gap: 8px; }
 .opt { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; cursor: pointer; font-size: 13.5px; }
@@ -176,16 +188,16 @@ h1, h2, .display {
 
 /* ===== Profile ===== */
 .profile-stats { display: flex; gap: 10px; margin-bottom: 20px; }
-.stat { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; text-align: center; color: var(--card-text); }
+.stat { flex: 1; background: var(--card-bg-dark); border: 1px solid var(--card-border-dark); border-radius: 14px; padding: 14px; text-align: center; color: var(--card-text-dark); }
 .stat-num { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; color: var(--heading-color); }
 .stat-label { font-size: 11px; color: var(--card-text-dim); margin-top: 2px; }
 .section-title { font-size: 14px; color: var(--card-text-dim); margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.05em; }
 .badge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.badge { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 8px; text-align: center; color: var(--card-text); }
+.badge { background: var(--card-bg-dark); border: 1px solid var(--card-border-dark); border-radius: 14px; padding: 14px 8px; text-align: center; color: var(--card-text-dark); }
 .badge.locked { opacity: 0.3; filter: grayscale(1); }
 .badge-icon { font-size: 24px; }
 .badge-title { font-size: 10.5px; margin-top: 6px; color: var(--badge-color); line-height: 1.3; }
-.edit-toggle-row { display: flex; justify-content: space-between; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; font-size: 13.5p[...] 
+.edit-toggle-row { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg-dark); border: 1px solid var(--card-border-dark); border-radius: 14px; padding: 14px; font-size: 13.5p[...] 
 
 /* ===== Bottom nav ===== */
 #bottomnav {
@@ -194,14 +206,14 @@ h1, h2, .display {
   padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   max-width: 480px; margin: 0 auto;
 }
-.navbtn { flex: 1; background: none; border: none; color: var(--card-text-dim); display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; cursor: pointer; padding: 6px; font-fa[...]
+.navbtn { flex: 1; background: none; border: none; color: var(--card-text-dim); display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; cursor: pointer; padding: 6px; font-fa[...] 
 .navbtn .navicon { font-size: 19px; }
 .navbtn.active { color: var(--heading-color); }
 
 /* ===== Modal ===== */
 #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
 #modal.show { display: flex; }
-.modal-card { background: var(--surface); border-radius: 20px 20px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; color: var(--card-text); }
+.modal-card { background: var(--card-bg-dark); border-radius: 20px 20px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; color: var(--card-text-dark); }
 .modal-card-wide { max-width: 480px; }
 @keyframes slideUp { from { transform: translateY(30px); opacity:0 } to { transform: translateY(0); opacity:1 } }
 .modal-card h2 { margin: 0 0 16px; font-size: 18px; }
