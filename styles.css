@@ -6,7 +6,12 @@
   --surface-2: #262B35;
   --border: #333947;
   --text: #ffffff;
-  --text-dim: #387d2d;
+  /* new fine-grained color variables */
+  --subheading-color: #387d2d; /* подзаголовки, второстепенный текст */
+  --btn-primary-bg: #419235;   /* фон для primary-кнопок */
+  --badge-color: #387d2d;      /* цвет для меток/бейджей */
+  --label-color: #387d2d;      /* цвет для label/hint */
+  --text-dim: var(--subheading-color);
   --accent: #abe5a2;
   --accent-2: #abe5a2;
   --success: #1FB6A6;
@@ -143,7 +148,7 @@ h1, h2, .display {
 .opt:has(input:checked) { border-color: var(--accent); background: rgba(171,229,162,0.08); }
 
 /* ===== Buttons ===== */
-.btn-primary { background: var(--heading-color); color: #16181D; border: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 12px; cursor: pointer; font-family: 'Inter', sans-serif;[...]
+.btn-primary { background: var(--btn-primary-bg); color: #16181D; border: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 12px; cursor: pointer; font-family: 'Inter', sans-serif;[...]
 .btn-block { width: 100%; margin-top: 8px; }
 .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; }
 
@@ -157,7 +162,7 @@ h1, h2, .display {
 .badge { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 8px; text-align: center; }
 .badge.locked { opacity: 0.3; filter: grayscale(1); }
 .badge-icon { font-size: 24px; }
-.badge-title { font-size: 10.5px; margin-top: 6px; color: var(--text-dim); line-height: 1.3; }
+.badge-title { font-size: 10.5px; margin-top: 6px; color: var(--badge-color); line-height: 1.3; }
 .edit-toggle-row { display: flex; justify-content: space-between; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; font-size: 13.5p[...]
 
 /* ===== Bottom nav ===== */
@@ -178,13 +183,13 @@ h1, h2, .display {
 .modal-card-wide { max-width: 480px; }
 @keyframes slideUp { from { transform: translateY(30px); opacity:0 } to { transform: translateY(0); opacity:1 } }
 .modal-card h2 { margin: 0 0 16px; font-size: 18px; }
-.modal-card label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+.modal-card label { display: block; font-size: 12px; color: var(--label-color); margin-bottom: 12px; }
 .modal-card input, .modal-card select, .modal-card textarea {
   display: block; width: 100%; margin-top: 5px; background: var(--surface-2); border: 1px solid var(--border);
   color: var(--text); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: inherit;
 }
 .modal-card textarea { font-family: ui-monospace, monospace; font-size: 12px; }
-.hint { font-size: 11px; color: var(--text-dim); margin-top: -6px; }
+.hint { font-size: 11px; color: var(--label-color); margin-top: -6px; }
 .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; }
 .result-emoji { font-size: 44px; text-align: center; }
 .modal-card .result-emoji + h2 { text-align: center; }
