@@ -104,6 +104,14 @@ async function cloudLoadAllUsers() {
   } catch (e) { console.warn("cloudLoadAllUsers failed:", e); return []; }
 }
 
+async function cloudDeleteUser(userId) {
+  if (!cloudReady) return false;
+  try {
+    await _db.collection("users").doc(userId).delete();
+    return true;
+  } catch (e) { console.warn("cloudDeleteUser failed:", e); return false; }
+}
+
 async function cloudLoadPortal() {
   if (!cloudReady) return null;
   try {

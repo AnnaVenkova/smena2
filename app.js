@@ -491,7 +491,8 @@ function showUserDetail(u) {
       <h2>${escapeHtml(u.name || "Без имени")}</h2>
       <p class="hint" style="text-align:left;margin-bottom:14px;">XP: ${u.xp || 0} · Уровень: ${levelForXp(u.xp || 0)} · Серия: ${u.streak || 0} дн. · Значков: ${(u.badges || []).length}</p>
       ${courseBlocks}
-      <div class="modal-actions" style="margin-top:14px;">
+      <div class="modal-actions" style="margin-top:14px;flex-wrap:wrap;gap:8px;">
+        <button class="btn-ghost" style="color:var(--danger)" data-delete-user="${u.id}">🗑 Удалить профиль</button>
         <button class="btn-ghost" data-export-user="${u.id}">📤 Выгрузить в Таблицу</button>
         <button class="btn-primary" data-close-modal>Закрыть</button>
       </div>
@@ -499,6 +500,24 @@ function showUserDetail(u) {
   modal.classList.add("show");
   modal.querySelector("[data-close-modal]").addEventListener("click", closeModal);
   modal.querySelector("[data-export-user]").addEventListener("click", () => exportUserToSheets(u));
+  modal.querySelector("[data-delete-user]").addEventListener("click", () => deleteUserProfile(u));
+}
+
+async function deleteUserProfile(u) {
+  if (!authReady || !currentAdmin) {
+    toast("Удаление доступно только вошедшему администратору (Firebase Authentication)", "warn");
+    return;
+  }
+  const sure = confirm(`Удалить профиль «${u.name || "Без имени"}» безвозвратно? Весь его прогресс, XP и результаты тестов будут стёрты.`);
+  if (!sure) return;
+  const ok = await cloudDeleteUser(u.id);
+  if (ok) {
+    toast("Профиль удалён", "badge");
+    closeModal();
+    loadAndRenderAdmin();
+  } else {
+    toast("Не удалось удалить профиль", "warn");
+  }
 }
 
 function escapeHtml(s) {
