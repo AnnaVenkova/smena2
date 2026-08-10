@@ -12,6 +12,7 @@
   --success: #1FB6A6;
   --danger: #E5484D;
   --radius: 16px;
+  --heading-color: #35773a;
 }
 
 * { box-sizing: border-box; }
@@ -27,6 +28,7 @@ h1, h2, .display {
   font-family: 'Oswald', 'Inter', sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  color: var(--heading-color);
 }
 
 #viewport {
@@ -56,8 +58,8 @@ h1, h2, .display {
 }
 .lvl-badge {
   font-family: 'Oswald', sans-serif;
-  background: var(--accent);
-  color: #16181D;
+  background: var(--heading-color);
+  color: #F2EFEA;
   font-weight: 700;
   font-size: 12px;
   padding: 4px 10px;
@@ -141,14 +143,14 @@ h1, h2, .display {
 .opt:has(input:checked) { border-color: var(--accent); background: rgba(255,107,53,0.08); }
 
 /* ===== Buttons ===== */
-.btn-primary { background: var(--accent); color: #16181D; border: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 12px; cursor: pointer; font-family: 'Inter', sans-serif;}
+.btn-primary { background: var(--heading-color); color: #F2EFEA; border: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 12px; cursor: pointer; font-family: 'Inter', sans-serif;}
 .btn-block { width: 100%; margin-top: 8px; }
 .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; }
 
 /* ===== Profile ===== */
 .profile-stats { display: flex; gap: 10px; margin-bottom: 20px; }
 .stat { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; text-align: center; }
-.stat-num { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; color: var(--accent); }
+.stat-num { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; color: var(--heading-color); }
 .stat-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 .section-title { font-size: 14px; color: var(--text-dim); margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.05em; }
 .badge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -167,12 +169,12 @@ h1, h2, .display {
 }
 .navbtn { flex: 1; background: none; border: none; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; cursor: pointer; padding: 6px; font-family: 'Inter', sans-serif; }
 .navbtn .navicon { font-size: 19px; }
-.navbtn.active { color: var(--accent); }
+.navbtn.active { color: var(--heading-color); }
 
 /* ===== Modal ===== */
 #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
 #modal.show { display: flex; }
-.modal-card { background: var(--surface); border-radius: 20px 20px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; animation: slideUp .25s ease; }
+.modal-card { background: var(--surface); border-radius: 20px 20px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; animation: slideUp .3s ease; }
 .modal-card-wide { max-width: 480px; }
 @keyframes slideUp { from { transform: translateY(30px); opacity:0 } to { transform: translateY(0); opacity:1 } }
 .modal-card h2 { margin: 0 0 16px; font-size: 18px; }
@@ -202,7 +204,7 @@ h1, h2, .display {
 .toast.warn { border-color: var(--danger); color: var(--danger); }
 
 /* ===== Demo banner ===== */
-.demo-banner { background: var(--surface-2); border: 1px dashed var(--border); color: var(--text-dim); font-size: 11.5px; padding: 8px 14px; border-radius: 10px; margin: 10px auto; text-align: center; max-width: 480px; }
+.demo-banner { background: var(--surface-2); border: 1px dashed var(--border); color: var(--text-dim); font-size: 11.5px; padding: 8px 14px; border-radius: 10px; margin: 10px auto; text-align: center; }
 
 @media (min-width: 900px) {
   .demo-banner { max-width: 1180px; }
@@ -213,7 +215,7 @@ h1, h2, .display {
 .onboard-emoji { font-size: 56px; margin-bottom: 6px; }
 .onboard h1 { font-size: 30px; margin: 0 0 10px; }
 .onboard-sub { color: var(--text-dim); font-size: 14px; line-height: 1.5; margin-bottom: 22px; max-width: 320px; }
-.onboard-input { width: 100%; max-width: 320px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 12px; padding: 14px; font-size: 15px; margin-bottom: 14px; text-align: center; }
+.onboard-input { width: 100%; max-width: 320px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 12px; padding: 14px; font-size: 15px; margin-bottom: 14px; }
 .onboard .btn-block { max-width: 320px; }
 
 /* ===== Hello row / sync ===== */
@@ -278,7 +280,7 @@ h1, h2, .display {
     width: 100%;
   }
   .navbtn:hover { background: var(--surface-2); }
-  .navbtn.active { background: rgba(255,107,53,0.14); color: var(--accent); }
+  .navbtn.active { background: rgba(53,119,58,0.14); color: var(--heading-color); }
   .navbtn .navicon { font-size: 20px; }
 
   #app { flex: 1; min-width: 0; padding: 0 0 60px; max-width: none; }
