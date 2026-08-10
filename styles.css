@@ -5,14 +5,14 @@
   --surface: #1F232B;
   --surface-2: #262B35;
   --border: #333947;
-  --text: #F2EFEA;
+  --text: #57e03e;
   --text-dim: #9AA0AC;
-  --accent: #FF6B35;
-  --accent-2: #F2B705;
+  --accent: #57e03e;
+  --accent-2: #57e03e;
   --success: #1FB6A6;
   --danger: #E5484D;
   --radius: 16px;
-  --heading-color: #35773a;
+  --heading-color: #57e03e;
 }
 
 * { box-sizing: border-box; }
@@ -59,7 +59,7 @@ h1, h2, .display {
 .lvl-badge {
   font-family: 'Oswald', sans-serif;
   background: var(--heading-color);
-  color: #F2EFEA;
+  color: #16181D;
   font-weight: 700;
   font-size: 12px;
   padding: 4px 10px;
@@ -120,7 +120,7 @@ h1, h2, .display {
 .station-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 .crit-flag {
   display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase;
-  background: rgba(242,183,5,0.15); color: var(--accent-2); padding: 2px 6px; border-radius: 6px; margin-left: 6px;
+  background: rgba(87,224,62,0.15); color: var(--accent-2); padding: 2px 6px; border-radius: 6px; margin-left: 6px;
   vertical-align: middle;
 }
 .belt-line {
@@ -140,10 +140,10 @@ h1, h2, .display {
 .q-options { display: flex; flex-direction: column; gap: 8px; }
 .opt { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; cursor: pointer; font-size: 13.5px; }
 .opt input { accent-color: var(--accent); }
-.opt:has(input:checked) { border-color: var(--accent); background: rgba(255,107,53,0.08); }
+.opt:has(input:checked) { border-color: var(--accent); background: rgba(87,224,62,0.08); }
 
 /* ===== Buttons ===== */
-.btn-primary { background: var(--heading-color); color: #F2EFEA; border: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 12px; cursor: pointer; font-family: 'Inter', sans-serif;}
+.btn-primary { background: var(--heading-color); color: #16181D; border: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 12px; cursor: pointer; font-family: 'Inter', sans-serif; }
 .btn-block { width: 100%; margin-top: 8px; }
 .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; }
 
@@ -174,7 +174,7 @@ h1, h2, .display {
 /* ===== Modal ===== */
 #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
 #modal.show { display: flex; }
-.modal-card { background: var(--surface); border-radius: 20px 20px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; animation: slideUp .3s ease; }
+.modal-card { background: var(--surface); border-radius: 20px 20px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto; animation: slideUp .3s; }
 .modal-card-wide { max-width: 480px; }
 @keyframes slideUp { from { transform: translateY(30px); opacity:0 } to { transform: translateY(0); opacity:1 } }
 .modal-card h2 { margin: 0 0 16px; font-size: 18px; }
@@ -280,7 +280,7 @@ h1, h2, .display {
     width: 100%;
   }
   .navbtn:hover { background: var(--surface-2); }
-  .navbtn.active { background: rgba(53,119,58,0.14); color: var(--heading-color); }
+  .navbtn.active { background: rgba(87,224,62,0.14); color: var(--heading-color); }
   .navbtn .navicon { font-size: 20px; }
 
   #app { flex: 1; min-width: 0; padding: 0 0 60px; max-width: none; }
