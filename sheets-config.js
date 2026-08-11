@@ -7,12 +7,19 @@
 //    Имя | Курс | Модуль | Баллы | Из скольки | Критично_ок | Дата
 // 2. В таблице: Расширения → Apps Script.
 // 3. Удалите весь код-заглушку и вставьте код из файла apps-script.txt (идёт вместе с этим архивом).
+//    В этом коде уже проверяется секретный ключ (см. ниже) — вставьте туда тот же ключ, что и здесь.
 // 4. Нажмите «Развернуть» (Deploy) → «New deployment» → тип «Web app».
 //    Execute as: Me. Who has access: Anyone. Нажмите Deploy, разрешите доступ (это ваш же скрипт).
 // 5. Скопируйте появившийся URL (заканчивается на /exec) и вставьте его вместо null ниже.
 // 6. Сохраните файл, закоммитьте и запушьте в GitHub.
 
-const SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzaEyVR2YD7YOA7NE2vCv67NEvw8j95A4gUDPVHfk-R3T30ezl6OfBwAexCCHY_7Q60/exec";
+const SHEETS_WEBHOOK_URL = null;
 
-// Пример после заполнения:
+// Секретный ключ — просто случайная строка, которую вы сами придумываете.
+// Она должна СОВПАДАТЬ с ключом внутри apps-script.txt (переменная SECRET там).
+// Так без этого ключа никто не сможет отправлять данные в вашу таблицу,
+// даже если каким-то образом узнает саму ссылку /exec.
+const SHEETS_SECRET = "JbC6W2LUDb5IHe6ALipEphrHGhU359AL";
+
+// Пример после заполнения ссылки:
 // const SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycb.../exec";

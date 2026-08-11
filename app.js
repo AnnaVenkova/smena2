@@ -100,13 +100,37 @@ function completeLesson(courseId, moduleId) {
   persist();
 }
 
+function decodeAnswer(q) {
+  // Правильный индекс хранится закодированным (base64) в поле c, чтобы
+  // он не был виден простым просмотром исходного кода страницы.
+  if (q.c !== undefined) { try { return parseInt(atob(q.c), 10); } catch (e) { return -1; } }
+  return q.correct; // на случай старых данных без кодирования
+}
+function encodeAnswer(n) { return btoa(String(n)); }
+
+// Для редактора в админ-панели: показываем понятное поле correct,
+// а храним/отправляем закодированное c — так админу удобно редактировать,
+// а в исходном коде/базе ответ не виден напрямую.
+function questionsForEditing(questions) {
+  return questions.map(q => {
+    const { c, ...rest } = q;
+    return { ...rest, correct: decodeAnswer(q) };
+  });
+}
+function questionsForStorage(questions) {
+  return questions.map(q => {
+    const { correct, ...rest } = q;
+    return { ...rest, c: encodeAnswer(correct) };
+  });
+}
+
 function submitQuiz(courseId, moduleId, answers) {
   touchStreak();
   const mod = getModule(courseId, moduleId);
   let correct = 0;
   let criticalOk = true;
   mod.questions.forEach((q, i) => {
-    const ok = answers[i] === q.correct;
+    const ok = answers[i] === decodeAnswer(q);
     if (ok) correct++;
     if (q.critical && !ok) criticalOk = false;
   });
@@ -746,9 +770,9 @@ function openModuleEditor(courseId, moduleId) {
       </div>
       <div id="f-quiz-fields" style="${type === "quiz" ? "" : "display:none"}">
         <label>Вопросы (JSON-формат)
-          <textarea id="f-questions" rows="8">${m && m.type === "quiz" ? escapeHtml(JSON.stringify(m.questions, null, 2)) : escapeHtml(JSON.stringify([{ q: "Текст вопроса", options: ["Вариант 1", "Вариант 2", "Вариант 3"], correct: 0, critical: false }], null, 2))}</textarea>
+          <textarea id="f-questions" rows="8">${m && m.type === "quiz" ? escapeHtml(JSON.stringify(questionsForEditing(m.questions), null, 2)) : escapeHtml(JSON.stringify([{ q: "Текст вопроса", options: ["Вариант 1", "Вариант 2", "Вариант 3"], correct: 0, critical: false }], null, 2))}</textarea>
         </label>
-        <p class="hint">correct — индекс правильного варианта (с 0). critical: true — вопрос по ОТ/ХАССП/стоп-факторам.</p>
+        <p class="hint">correct — индекс правильного варианта (с 0). critical: true — вопрос по ОТ/ХАССП/стоп-факторам. При сохранении ответ автоматически скрывается от простого просмотра кода страницы.</p>
       </div>
       <div class="modal-actions">
         ${m ? `<button class="btn-ghost" style="color:var(--danger)" data-del-module="${courseId}|${m.id}">Удалить</button>` : ""}
@@ -775,7 +799,7 @@ function openModuleEditor(courseId, moduleId) {
       let questions;
       try { questions = JSON.parse(document.getElementById("f-questions").value); }
       catch (e) { toast("Ошибка в JSON вопросов", "warn"); return; }
-      newMod = { id: m ? m.id : "mod" + Date.now(), type: "quiz", title, questions, isFinalExam };
+      newMod = { id: m ? m.id : "mod" + Date.now(), type: "quiz", title, questions: questionsForStorage(questions), isFinalExam };
     }
     if (m) {
       const idx = c.modules.findIndex(x => x.id === m.id);
@@ -853,7 +877,8 @@ function closeModal() {
 // прямо в адресе и не зависят от переадресации.
 function sheetsSend(rows) {
   if (typeof SHEETS_WEBHOOK_URL === "undefined" || !SHEETS_WEBHOOK_URL) return Promise.resolve(false);
-  const url = SHEETS_WEBHOOK_URL + "?data=" + encodeURIComponent(JSON.stringify({ rows }));
+  const secret = (typeof SHEETS_SECRET !== "undefined" && SHEETS_SECRET) ? SHEETS_SECRET : "";
+  const url = SHEETS_WEBHOOK_URL + "?data=" + encodeURIComponent(JSON.stringify({ rows, secret }));
   return fetch(url, { method: "GET", mode: "no-cors" }).then(() => true).catch(e => { console.warn(e); return false; });
 }
 
