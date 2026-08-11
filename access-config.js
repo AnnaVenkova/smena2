@@ -11,4 +11,4 @@
 //
 // Как поменять код: замените строку ниже и сохраните файл.
 
-const ACCESS_CODE = "smena2026";
+const ACCESS_CODE = "smena";
