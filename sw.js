@@ -5,6 +5,7 @@ const ASSETS = [
   "./data.js",
   "./app.js",
   "./cloud.js",
+  "./access-config.js",
   "./firebase-config.js",
   "./sheets-config.js",
   "./manifest.json",

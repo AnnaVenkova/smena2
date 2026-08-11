@@ -181,8 +181,48 @@ function currentRoute() {
 window.addEventListener("hashchange", render);
 function nav(path) { location.hash = "#/" + path; }
 
+// ===== ACCESS GATE (общий код доступа к сайту) =====
+// true заменяется при сборке: false в демо-версии для чата
+// (чтобы не мешать тестированию), true в версии для реальной установки.
+const ACCESS_GATE_ENABLED = true;
+let ACCESS_OK = !ACCESS_GATE_ENABLED;
+
+function checkAccessGate() {
+  if (!ACCESS_GATE_ENABLED) { ACCESS_OK = true; return; }
+  try { ACCESS_OK = localStorage.getItem(Storage.key + "_gate") === "1"; }
+  catch (e) { ACCESS_OK = false; }
+}
+
+function renderAccessGate() {
+  const root = document.getElementById("app");
+  document.getElementById("bottomnav").style.display = "none";
+  root.innerHTML = `
+    <div class="onboard">
+      <div class="onboard-emoji">🔒</div>
+      <h1>Смена+</h1>
+      <p class="onboard-sub">Введите код доступа, который вам сообщили — он нужен один раз на этом устройстве.</p>
+      <input id="f-accesscode" placeholder="Код доступа" class="onboard-input" type="password">
+      <p class="hint" id="access-error" style="color:var(--danger);"></p>
+      <button class="btn-primary btn-block" data-check-access>Войти</button>
+    </div>`;
+  document.getElementById("f-accesscode").focus();
+  const go = () => {
+    const val = document.getElementById("f-accesscode").value;
+    if (val !== (typeof ACCESS_CODE !== "undefined" ? ACCESS_CODE : "")) {
+      document.getElementById("access-error").textContent = "Неверный код";
+      return;
+    }
+    ACCESS_OK = true;
+    try { localStorage.setItem(Storage.key + "_gate", "1"); } catch (e) {}
+    render();
+  };
+  document.querySelector("[data-check-access]").addEventListener("click", go);
+  document.getElementById("f-accesscode").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+}
+
 // ===== RENDER ROOT =====
 function render() {
+  if (!ACCESS_OK) { renderAccessGate(); return; }
   if (!STATE.userId) { renderOnboarding(); return; }
   const root = document.getElementById("app");
   const [page, a, b] = currentRoute();
@@ -911,9 +951,10 @@ async function sendExamToSheets(courseId, moduleId, result) {
 
 // ===== INIT =====
 document.addEventListener("DOMContentLoaded", async () => {
+  checkAccessGate();
   initCloud();
   document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
   render();
-  if (STATE.userId) await syncFromCloud();
+  if (ACCESS_OK && STATE.userId) await syncFromCloud();
   render();
 });
