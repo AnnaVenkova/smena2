@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
   --bg: #16181D;
@@ -7,10 +7,12 @@
   --border: #333947;
   --text: #F2EFEA;
   --text-dim: #9AA0AC;
-  --accent: #FF6B35;
+  --accent: #419235;
   --accent-2: #F2B705;
   --success: #1FB6A6;
-  --danger: #E5484D;
+  --danger: #34752A;
+  --danger-light: #63A659;
+  --danger-dark: #245A1D;
   --radius: 16px;
 }
 
@@ -24,7 +26,7 @@ body {
   overscroll-behavior-y: contain;
 }
 h1, h2, .display {
-  font-family: 'Oswald', 'Inter', sans-serif;
+  font-family: 'Playfair Display', 'Inter', serif;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
@@ -55,7 +57,7 @@ h1, h2, .display {
   margin-bottom: 18px;
 }
 .lvl-badge {
-  font-family: 'Oswald', sans-serif;
+  font-family: 'Playfair Display', serif;
   background: var(--accent);
   color: #16181D;
   font-weight: 700;
@@ -110,7 +112,7 @@ h1, h2, .display {
 .station-dot {
   width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2);
   display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;
-  font-family: 'Oswald', sans-serif;
+  font-family: 'Playfair Display', serif;
 }
 .station.done .station-dot { background: var(--success); color: #0a1512; }
 .station.current .station-dot { background: var(--accent); color: #16181D; }
@@ -138,7 +140,7 @@ h1, h2, .display {
 .q-options { display: flex; flex-direction: column; gap: 8px; }
 .opt { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; cursor: pointer; font-size: 13.5px; }
 .opt input { accent-color: var(--accent); }
-.opt:has(input:checked) { border-color: var(--accent); background: rgba(255,107,53,0.08); }
+.opt:has(input:checked) { border-color: var(--accent); background: rgba(65,146,53,0.10); }
 
 /* ===== Buttons ===== */
 .btn-primary { background: var(--accent); color: #16181D; border: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 12px; cursor: pointer; font-family: 'Inter', sans-serif;}
@@ -148,7 +150,7 @@ h1, h2, .display {
 /* ===== Profile ===== */
 .profile-stats { display: flex; gap: 10px; margin-bottom: 20px; }
 .stat { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; text-align: center; }
-.stat-num { font-family: 'Oswald', sans-serif; font-size: 24px; font-weight: 700; color: var(--accent); }
+.stat-num { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; color: var(--accent); }
 .stat-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 .section-title { font-size: 14px; color: var(--text-dim); margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.05em; }
 .badge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -278,7 +280,7 @@ h1, h2, .display {
     width: 100%;
   }
   .navbtn:hover { background: var(--surface-2); }
-  .navbtn.active { background: rgba(255,107,53,0.14); color: var(--accent); }
+  .navbtn.active { background: rgba(65,146,53,0.16); color: var(--accent); }
   .navbtn .navicon { font-size: 20px; }
 
   #app { flex: 1; min-width: 0; padding: 0 0 60px; max-width: none; }

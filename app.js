@@ -760,7 +760,7 @@ function openCourseEditor(courseId) {
       <label>Название<input id="f-title" value="${c ? escapeHtml(c.title) : ""}"></label>
       <label>Подзаголовок<input id="f-sub" value="${c ? escapeHtml(c.subtitle || "") : ""}"></label>
       <label>Иконка (эмодзи)<input id="f-icon" value="${c ? c.icon : "📘"}"></label>
-      <label>Цвет акцента<input id="f-color" type="color" value="${c ? c.color : "#FF6B35"}"></label>
+      <label>Цвет акцента<input id="f-color" type="color" value="${c ? c.color : "#419235"}"></label>
       <div class="modal-actions">
         ${c ? `<button class="btn-ghost" style="color:var(--danger)" data-del-course="${c.id}">Удалить курс</button>` : ""}
         <button class="btn-primary" data-save-course="${c ? c.id : ""}">Сохранить</button>
