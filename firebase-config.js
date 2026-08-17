@@ -29,6 +29,7 @@ const firebaseConfig = {
   storageBucket: "smena3-975cd.firebasestorage.app",
   messagingSenderId: "498368556296",
   appId: "1:498368556296:web:1231f854420b098191d0bd";
+};
 
 /* Пример заполненной конфигурации (у вас будут другие значения):
 const FIREBASE_CONFIG = {
