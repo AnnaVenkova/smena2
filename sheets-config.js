@@ -13,7 +13,7 @@
 // 5. Скопируйте появившийся URL (заканчивается на /exec) и вставьте его вместо null ниже.
 // 6. Сохраните файл, закоммитьте и запушьте в GitHub.
 
-const SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzAnMzzzy4Dut_DcxK78OFRdFwFOQ36vhQc1fAtg-oML0kxabieGSD-b4Dp8ifneFMu/exec";
+const SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycby2U3IjXCg4rtX7s2jY3oNLm_kERQ38xGtCbZbe6fibhjF0LdlyBuVXh7Qf6lEF-TeH/exec";
 
 // Секретный ключ — просто случайная строка, которую вы сами придумываете.
 // Она должна СОВПАДАТЬ с ключом внутри apps-script.txt (переменная SECRET там).
