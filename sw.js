@@ -1,4 +1,4 @@
-const CACHE = "smena-plus-v3";
+const CACHE = "smena-plus-v4";
 const ASSETS = [
   "./index.html",
   "./styles.css",
@@ -30,22 +30,20 @@ self.addEventListener("activate", e => {
 });
 
 // Сеть в приоритете (чтобы обновления кода приходили сразу),
-// кеш — только запасной вариант, если нет интернета.
-// ВАЖНО: перехватываем и кешируем только запросы к своему же сайту.
-// Запросы к Firebase/Firestore и другим внешним сервисам пропускаем
-// без вмешательства — у них особый тип долгоживущих соединений,
-// которые нельзя оборачивать в обычное кеширование (иначе связь с
-// облаком обрывается с ошибкой "Response body is already used").
+// кеш — только запасной вариант при отсутствии интернета.
+// ВАЖНО: перехватываем только запросы к своему же сайту — запросы
+// к Firebase/Firestore, шрифтам и другим внешним сервисам пропускаем
+// без вмешательства.
+// Раньше здесь дополнительно "досохранялась" свежая копия каждого
+// ответа в кеш (через .clone()) — именно это в некоторых ситуациях
+// вызывало ошибку "Response body is already used" и рвало связь
+// с облаком. Теперь просто отдаём сеть, а при её отсутствии — то,
+// что уже лежит в кеше с момента установки (список ASSETS выше).
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
   e.respondWith(
-    fetch(e.request)
-      .then(res => {
-        if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()));
-        return res;
-      })
-      .catch(() => caches.match(e.request))
+    fetch(e.request).catch(() => caches.match(e.request))
   );
 });
