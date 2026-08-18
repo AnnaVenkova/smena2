@@ -22,13 +22,13 @@
 // После этого в приложении: Профиль → «Включить» (режим администратора) откроет
 // окно входа по email и паролю — тому, что вы создали на шаге 3.
 
-const firebaseConfig = {
+const FIREBASE_CONFIG = {
   apiKey: "AIzaSyALRvBuWHojHwx0nwVy-bkPhkFiyq8LI_k",
   authDomain: "smena3-975cd.firebaseapp.com",
   projectId: "smena3-975cd",
   storageBucket: "smena3-975cd.firebasestorage.app",
   messagingSenderId: "498368556296",
-  appId: "1:498368556296:web:1231f854420b098191d0bd";
+  appId: "1:498368556296:web:1231f854420b098191d0bd"
 };
 
 /* Пример заполненной конфигурации (у вас будут другие значения):
