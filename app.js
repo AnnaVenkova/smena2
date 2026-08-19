@@ -435,6 +435,7 @@ function renderPortalList() {
       ${STATE.editMode ? `<button class="btn-ghost" data-add-article>+ Материал</button>` : ""}
     </div>
     <p class="hint" style="text-align:left;margin-bottom:6px;">Справочные материалы, чек-листы и регламенты — не курсы, а быстрый поиск нужной информации.</p>
+    ${STATE.portal.length ? `<button class="btn-ghost" data-export-portal style="margin-bottom:14px;">⬇️ Скачать весь портал в Word</button>` : ""}
     ${blocks || `<p class="hint">Материалов пока нет.</p>`}
   `;
 }
@@ -454,6 +455,7 @@ function renderArticle(articleId) {
       <h1>${escapeHtml(a.title)}</h1>
     </div>
     <div class="lesson-body">${paragraphs}</div>
+    <button class="btn-ghost btn-block" data-export-article="${a.id}" style="margin-top:12px;">⬇️ Скачать в Word (.docx)</button>
   `;
 }
 
@@ -609,6 +611,12 @@ function attachHandlers(page) {
     if (e.target.closest("[data-edit-article]")) return;
     nav("article/" + el.dataset.openArticle);
   }));
+
+  document.querySelectorAll("[data-export-article]").forEach(el => el.addEventListener("click", () => {
+    const a = STATE.portal.find(x => x.id === el.dataset.exportArticle);
+    if (a) exportArticleToDocx(a);
+  }));
+  document.querySelectorAll("[data-export-portal]").forEach(el => el.addEventListener("click", exportPortalToDocx));
 
   document.querySelectorAll("[data-complete-lesson]").forEach(el => el.addEventListener("click", () => {
     const [courseId, moduleId] = el.dataset.completeLesson.split("|");
@@ -947,6 +955,71 @@ async function sendExamToSheets(courseId, moduleId, result) {
   if (typeof SHEETS_WEBHOOK_URL === "undefined" || !SHEETS_WEBHOOK_URL) return;
   const c = getCourse(courseId); const m = getModule(courseId, moduleId);
   await sheetsSend([{ name: STATE.userName, course: c.title, module: m.title, score: result.score, total: result.total, criticalOk: result.criticalOk, date: new Date().toISOString() }]);
+}
+
+// ===== EXPORT TO WORD (.docx) =====
+function docxParagraphsFromBody(bodyText) {
+  const { Paragraph, TextRun } = docx;
+  const paras = [];
+  bodyText.split("\n\n").forEach(block => {
+    if (block.startsWith("- ")) {
+      block.split("\n").forEach(line => {
+        paras.push(new Paragraph({ text: line.replace(/^- /, ""), bullet: { level: 0 }, spacing: { after: 80 } }));
+      });
+    } else {
+      paras.push(new Paragraph({ children: [new TextRun(block)], spacing: { after: 200 } }));
+    }
+  });
+  return paras;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
+function sanitizeFilename(name) {
+  return (name || "Документ").replace(/[\\/:*?"<>|]/g, "").trim().slice(0, 80) || "Документ";
+}
+
+async function exportArticleToDocx(article) {
+  if (typeof docx === "undefined") { toast("Модуль экспорта в Word не загрузился — проверьте интернет и обновите страницу", "warn"); return; }
+  try {
+    const { Document, Packer, Paragraph, HeadingLevel } = docx;
+    const doc = new Document({
+      sections: [{
+        children: [
+          new Paragraph({ text: article.title, heading: HeadingLevel.HEADING_1, spacing: { after: 240 } }),
+          ...docxParagraphsFromBody(article.body)
+        ]
+      }]
+    });
+    const blob = await Packer.toBlob(doc);
+    downloadBlob(blob, sanitizeFilename(article.title) + ".docx");
+  } catch (e) { console.warn(e); toast("Не удалось создать файл Word", "warn"); }
+}
+
+async function exportPortalToDocx() {
+  if (typeof docx === "undefined") { toast("Модуль экспорта в Word не загрузился — проверьте интернет и обновите страницу", "warn"); return; }
+  try {
+    const { Document, Packer, Paragraph, HeadingLevel } = docx;
+    const cats = {};
+    STATE.portal.forEach(a => { (cats[a.category] = cats[a.category] || []).push(a); });
+    const children = [new Paragraph({ text: "Портал — справочные материалы", heading: HeadingLevel.TITLE, spacing: { after: 300 } })];
+    Object.keys(cats).forEach(cat => {
+      children.push(new Paragraph({ text: cat, heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 160 } }));
+      cats[cat].forEach(a => {
+        children.push(new Paragraph({ text: a.title, heading: HeadingLevel.HEADING_2, spacing: { before: 160, after: 120 } }));
+        children.push(...docxParagraphsFromBody(a.body));
+      });
+    });
+    const doc = new Document({ sections: [{ children }] });
+    const blob = await Packer.toBlob(doc);
+    downloadBlob(blob, "Портал.docx");
+  } catch (e) { console.warn(e); toast("Не удалось создать файл Word", "warn"); }
 }
 
 // ===== INIT =====
