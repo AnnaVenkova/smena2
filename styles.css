@@ -311,3 +311,179 @@ h1, h2, .display {
 
   .screen-header h1 { font-size: 26px; }
 }
+/* ===== Вложения (файлы в уроках и материалах портала) ===== */
+.attachments {
+  margin: 16px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.attachments-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.attach-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .15s, background .15s;
+}
+.attach-item:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.attach-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.attach-meta {
+  flex: 1;
+  min-width: 0;
+}
+.attach-name {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.attach-size {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.attach-action {
+  font-size: 12px;
+  color: var(--accent);
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+/* Превью картинок прямо в материале */
+.attach-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 4px;
+}
+.attach-img {
+  display: block;
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  object-fit: contain;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+/* Редактор: список файлов + кнопка загрузки */
+.files-editor {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--surface-2);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.files-editor-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.file-row .fname {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-row .fsize {
+  color: var(--muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.file-row .fdel {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+  line-height: 1;
+}
+.file-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+}
+.file-upload-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.file-upload-btn input {
+  display: none;
+}
+.file-upload-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+  text-align: center;
+}
+.file-upload-progress {
+  font-size: 12px;
+  color: var(--accent);
+  margin-top: 6px;
+  text-align: center;
+}
+
+/* Лайтбокс для картинок */
+.img-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  cursor: zoom-out;
+}
+.img-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  object-fit: contain;
+}

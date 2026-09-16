@@ -1,0 +1,14 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Вложения курсов и портала (картинки, PDF, Word, PPT, Excel)
+    // Читать могут все — сотрудники открывают материалы без отдельного логина.
+    // Загружать и удалять может только вошедший администратор (Firebase Auth).
+    match /content/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.resource.size < 25 * 1024 * 1024;
+      allow delete: if request.auth != null;
+    }
+  }
+}

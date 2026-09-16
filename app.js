@@ -376,15 +376,140 @@ function renderCourseDetail(courseId) {
   `;
 }
 
+
+// ===== ATTACHMENTS (files in lessons & portal) =====
+function isImageFile(f) {
+  if (!f) return false;
+  const t = (f.type || "").toLowerCase();
+  const n = (f.name || "").toLowerCase();
+  return t.startsWith("image/") || /\.(jpe?g|png|webp|gif)$/.test(n);
+}
+
+function renderAttachments(files) {
+  if (!files || !files.length) return "";
+  const images = files.filter(isImageFile);
+  const list = files.map(f => {
+    const icon = (typeof fileIconFor === "function") ? fileIconFor(f.name, f.type) : "📎";
+    const size = (typeof formatFileSize === "function") ? formatFileSize(f.size) : "";
+    return `
+      <a class="attach-item" href="${escapeHtml(f.url)}" target="_blank" rel="noopener" download="${escapeHtml(f.name)}">
+        <span class="attach-icon">${icon}</span>
+        <span class="attach-meta">
+          <div class="attach-name">${escapeHtml(f.name)}</div>
+          ${size ? `<div class="attach-size">${size}</div>` : ""}
+        </span>
+        <span class="attach-action">Открыть</span>
+      </a>`;
+  }).join("");
+  return `
+    <div class="attachments">
+      <div class="attachments-title">Вложения</div>
+      ${images.length ? `<div class="attach-images">` + images.map(f =>
+        `<img class="attach-img" src="${escapeHtml(f.url)}" alt="${escapeHtml(f.name)}" loading="lazy" data-lightbox="${escapeHtml(f.url)}">`
+      ).join("") + `</div>` : ""}
+      ${list}
+    </div>`;
+}
+
+function renderFilesEditor(files, inputId) {
+  const list = (files || []).map((f, i) => {
+    const icon = (typeof fileIconFor === "function") ? fileIconFor(f.name, f.type) : "📎";
+    const size = (typeof formatFileSize === "function") ? formatFileSize(f.size) : "";
+    return `
+      <div class="file-row" data-fi="${i}">
+        <span>${icon}</span>
+        <span class="fname">${escapeHtml(f.name)}</span>
+        <span class="fsize">${size}</span>
+        <button type="button" class="fdel" data-remove-file="${i}" title="Удалить">×</button>
+      </div>`;
+  }).join("");
+  return `
+    <div class="files-editor">
+      <div class="files-editor-title">Вложения</div>
+      <div class="files-list" id="${inputId}-list">${list || ""}</div>
+      <label class="file-upload-btn">
+        📎 Добавить файл
+        <input type="file" id="${inputId}" accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,image/*,application/pdf">
+      </label>
+      <div class="file-upload-hint">Картинки, PDF, Word, PowerPoint, Excel — до 25 МБ</div>
+      <div class="file-upload-progress" id="${inputId}-progress" style="display:none"></div>
+    </div>`;
+}
+
+function bindFilesEditor(inputId, filesRef, folder) {
+  const input = document.getElementById(inputId);
+  const listEl = document.getElementById(inputId + "-list");
+  const prog = document.getElementById(inputId + "-progress");
+  if (!input || !listEl) return;
+
+  function refreshList() {
+    listEl.innerHTML = (filesRef.files || []).map((f, i) => {
+      const icon = (typeof fileIconFor === "function") ? fileIconFor(f.name, f.type) : "📎";
+      const size = (typeof formatFileSize === "function") ? formatFileSize(f.size) : "";
+      return `
+        <div class="file-row" data-fi="${i}">
+          <span>${icon}</span>
+          <span class="fname">${escapeHtml(f.name)}</span>
+          <span class="fsize">${size}</span>
+          <button type="button" class="fdel" data-remove-file="${i}" title="Удалить">×</button>
+        </div>`;
+    }).join("");
+    listEl.querySelectorAll("[data-remove-file]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const idx = parseInt(btn.dataset.removeFile, 10);
+        const f = filesRef.files[idx];
+        if (!f) return;
+        if (!confirm("Удалить файл «" + f.name + "»?")) return;
+        if (f.id && typeof deleteContentFile === "function") await deleteContentFile(f.id);
+        filesRef.files.splice(idx, 1);
+        refreshList();
+      });
+    });
+  }
+
+  refreshList();
+
+  input.addEventListener("change", async () => {
+    const file = input.files && input.files[0];
+    input.value = "";
+    if (!file) return;
+    if (typeof uploadContentFile !== "function") {
+      toast("Загрузка файлов недоступна", "warn");
+      return;
+    }
+    prog.style.display = "";
+    prog.textContent = "Загрузка «" + file.name + "»…";
+    const res = await uploadContentFile(file, folder);
+    prog.style.display = "none";
+    if (!res.ok) {
+      toast(res.error || "Ошибка загрузки", "warn");
+      return;
+    }
+    filesRef.files = filesRef.files || [];
+    filesRef.files.push(res.file);
+    refreshList();
+    toast("Файл загружен", "badge");
+  });
+}
+
+function openLightbox(url) {
+  const box = document.createElement("div");
+  box.className = "img-lightbox";
+  box.innerHTML = `<img src="${escapeHtml(url)}" alt="">`;
+  box.addEventListener("click", () => box.remove());
+  document.body.appendChild(box);
+}
+
 function renderLesson(courseId, moduleId) {
   const m = getModule(courseId, moduleId);
-  const paragraphs = m.body.split("\n\n").map(t => `<p>${escapeHtml(t)}</p>`).join("");
+  const paragraphs = (m.body || "").split("\n\n").map(t => `<p>${escapeHtml(t)}</p>`).join("");
   return `
     <div class="screen-header">
       <button class="back-btn" data-back-course="${courseId}">‹</button>
       <h1>${escapeHtml(m.title)}</h1>
     </div>
     <div class="lesson-body">${paragraphs}</div>
+    ${renderAttachments(m.files)}
     <button class="btn-primary btn-block" data-complete-lesson="${courseId}|${moduleId}">Понятно, продолжить (+10 XP)</button>
   `;
 }
@@ -443,7 +568,7 @@ function renderPortalList() {
 function renderArticle(articleId) {
   const a = STATE.portal.find(x => x.id === articleId);
   if (!a) return renderPortalList();
-  const paragraphs = a.body.split("\n\n").map(t => {
+  const paragraphs = (a.body || "").split("\n\n").map(t => {
     if (t.startsWith("- ")) {
       return "<ul>" + t.split("\n").map(li => `<li>${escapeHtml(li.replace(/^- /, ""))}</li>`).join("") + "</ul>";
     }
@@ -455,6 +580,7 @@ function renderArticle(articleId) {
       <h1>${escapeHtml(a.title)}</h1>
     </div>
     <div class="lesson-body">${paragraphs}</div>
+    ${renderAttachments(a.files)}
     <button class="btn-ghost btn-block" data-export-article="${a.id}" style="margin-top:12px;">⬇️ Скачать в Word (.docx)</button>
   `;
 }
@@ -665,6 +791,10 @@ function attachHandlers(page) {
 
   document.querySelectorAll("[data-add-article]").forEach(el => el.addEventListener("click", () => openArticleEditor()));
   document.querySelectorAll("[data-edit-article]").forEach(el => el.addEventListener("click", e => { e.stopPropagation(); openArticleEditor(el.dataset.editArticle); }));
+
+  document.querySelectorAll("[data-lightbox]").forEach(el => {
+    el.addEventListener("click", () => openLightbox(el.dataset.lightbox));
+  });
 }
 
 function showQuizResult(courseId, moduleId, r) {
@@ -802,6 +932,8 @@ function openModuleEditor(courseId, moduleId) {
   const m = moduleId ? getModule(courseId, moduleId) : null;
   const modal = document.getElementById("modal");
   const type = m ? m.type : "lesson";
+  const filesRef = { files: (m && m.files) ? m.files.slice() : [] };
+
   modal.innerHTML = `
     <div class="modal-card modal-card-wide">
       <h2>${m ? "Редактировать модуль" : "Новый модуль"}</h2>
@@ -815,6 +947,7 @@ function openModuleEditor(courseId, moduleId) {
       <label><input type="checkbox" id="f-final-exam" ${m && m.isFinalExam ? "checked" : ""} style="width:auto;display:inline-block;margin-right:6px;">Это итоговый экзамен (результат уходит в Таблицу)</label>
       <div id="f-lesson-fields" style="${type === "lesson" ? "" : "display:none"}">
         <label>Текст урока (абзацы через пустую строку)<textarea id="f-body" rows="6">${m && m.type === "lesson" ? escapeHtml(m.body) : ""}</textarea></label>
+        ${renderFilesEditor(filesRef.files, "f-mod-files")}
       </div>
       <div id="f-quiz-fields" style="${type === "quiz" ? "" : "display:none"}">
         <label>Вопросы (JSON-формат)
@@ -835,6 +968,8 @@ function openModuleEditor(courseId, moduleId) {
     document.getElementById("f-quiz-fields").style.display = typeSel.value === "quiz" ? "" : "none";
   });
 
+  bindFilesEditor("f-mod-files", filesRef, "lessons");
+
   modal.querySelector("[data-save-module]").addEventListener("click", () => {
     const title = document.getElementById("f-mtitle").value.trim();
     if (!title) { toast("Укажите название", "warn"); return; }
@@ -842,12 +977,25 @@ function openModuleEditor(courseId, moduleId) {
     const isFinalExam = document.getElementById("f-final-exam").checked;
     let newMod;
     if (mtype === "lesson") {
-      newMod = { id: m ? m.id : "mod" + Date.now(), type: "lesson", title, body: document.getElementById("f-body").value.trim(), isFinalExam };
+      newMod = {
+        id: m ? m.id : "mod" + Date.now(),
+        type: "lesson",
+        title,
+        body: document.getElementById("f-body").value.trim(),
+        isFinalExam,
+        files: filesRef.files || []
+      };
     } else {
       let questions;
       try { questions = JSON.parse(document.getElementById("f-questions").value); }
       catch (e) { toast("Ошибка в JSON вопросов", "warn"); return; }
-      newMod = { id: m ? m.id : "mod" + Date.now(), type: "quiz", title, questions: questionsForStorage(questions), isFinalExam };
+      newMod = {
+        id: m ? m.id : "mod" + Date.now(),
+        type: "quiz",
+        title,
+        questions: questionsForStorage(questions),
+        isFinalExam
+      };
     }
     if (m) {
       const idx = c.modules.findIndex(x => x.id === m.id);
@@ -867,10 +1015,11 @@ function openModuleEditor(courseId, moduleId) {
   });
 }
 
-// ===== EDIT MODALS: портал =====
 function openArticleEditor(articleId) {
   const a = articleId ? STATE.portal.find(x => x.id === articleId) : null;
   const modal = document.getElementById("modal");
+  const filesRef = { files: (a && a.files) ? a.files.slice() : [] };
+
   modal.innerHTML = `
     <div class="modal-card modal-card-wide">
       <h2>${a ? "Редактировать материал" : "Новый материал"}</h2>
@@ -879,12 +1028,16 @@ function openArticleEditor(articleId) {
       <label>Иконка (эмодзи)<input id="f-aicon" value="${a ? a.icon : "📄"}"></label>
       <label>Краткое описание<input id="f-asummary" value="${a ? escapeHtml(a.summary || "") : ""}"></label>
       <label>Текст (абзацы через пустую строку; список — строки, начинающиеся с "- ")<textarea id="f-abody" rows="8">${a ? escapeHtml(a.body) : ""}</textarea></label>
+      ${renderFilesEditor(filesRef.files, "f-art-files")}
       <div class="modal-actions">
         ${a ? `<button class="btn-ghost" style="color:var(--danger)" data-del-article="${a.id}">Удалить</button>` : ""}
         <button class="btn-primary" data-save-article="${a ? a.id : ""}">Сохранить</button>
       </div>
     </div>`;
   modal.classList.add("show");
+
+  bindFilesEditor("f-art-files", filesRef, "portal");
+
   modal.querySelector("[data-save-article]").addEventListener("click", () => {
     const title = document.getElementById("f-atitle").value.trim();
     if (!title) { toast("Укажите название", "warn"); return; }
@@ -894,7 +1047,8 @@ function openArticleEditor(articleId) {
       title,
       icon: document.getElementById("f-aicon").value.trim() || "📄",
       summary: document.getElementById("f-asummary").value.trim(),
-      body: document.getElementById("f-abody").value.trim()
+      body: document.getElementById("f-abody").value.trim(),
+      files: filesRef.files || []
     };
     if (a) {
       const idx = STATE.portal.findIndex(x => x.id === a.id);

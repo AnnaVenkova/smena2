@@ -20,6 +20,7 @@ function initCloud() {
     cloudReady = false;
   }
   initAuth();
+  initStorage();
 }
 
 // ===== ADMIN AUTH (Firebase Authentication — вход по email/паролю) =====
@@ -126,4 +127,105 @@ async function cloudSavePortal(articles) {
     await _db.collection("content").doc("portal").set({ articles, updatedAt: Date.now() });
     return true;
   } catch (e) { console.warn("cloudSavePortal failed:", e); return false; }
+}
+
+// ===== FIREBASE STORAGE (вложения: картинки, PDF, Word, PPT, Excel) =====
+let _storage = null;
+
+function initStorage() {
+  if (!cloudReady || typeof firebase === "undefined" || !firebase.storage) return;
+  try {
+    _storage = firebase.storage();
+  } catch (e) {
+    console.warn("Firebase Storage init failed:", e);
+  }
+}
+
+const ALLOWED_MIME = [
+  "image/jpeg", "image/png", "image/webp", "image/gif",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+];
+
+const ALLOWED_EXT = /\.(jpe?g|png|webp|gif|pdf|docx?|pptx?|xlsx?)$/i;
+
+function isAllowedFile(file) {
+  if (ALLOWED_MIME.includes(file.type)) return true;
+  return ALLOWED_EXT.test(file.name || "");
+}
+
+function fileIconFor(name, type) {
+  const n = (name || "").toLowerCase();
+  const t = (type || "").toLowerCase();
+  if (t.startsWith("image/") || /\.(jpe?g|png|webp|gif)$/.test(n)) return "🖼️";
+  if (t.includes("pdf") || n.endsWith(".pdf")) return "📕";
+  if (t.includes("word") || t.includes("document") || /\.docx?$/.test(n)) return "📘";
+  if (t.includes("presentation") || t.includes("powerpoint") || /\.pptx?$/.test(n)) return "📙";
+  if (t.includes("sheet") || t.includes("excel") || /\.xlsx?$/.test(n)) return "📗";
+  return "📎";
+}
+
+function formatFileSize(bytes) {
+  if (!bytes && bytes !== 0) return "";
+  if (bytes < 1024) return bytes + " Б";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " КБ";
+  return (bytes / (1024 * 1024)).toFixed(1) + " МБ";
+}
+
+async function uploadContentFile(file, folder = "lessons") {
+  if (!_storage) return { ok: false, error: "Storage не настроен. Подключите Firebase Storage." };
+  if (!currentAdmin) return { ok: false, error: "Нужен вход администратора" };
+  if (!isAllowedFile(file)) {
+    return { ok: false, error: "Тип не поддерживается. Можно: картинки, PDF, Word, PowerPoint, Excel" };
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    return { ok: false, error: "Файл больше 25 МБ" };
+  }
+
+  const safeName = (file.name || "file")
+    .replace(/[^\w.\-а-яА-ЯёЁ ]/gi, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 80);
+  const path = `content/${folder}/${Date.now()}_${safeName}`;
+  const ref = _storage.ref(path);
+
+  try {
+    const snap = await ref.put(file, {
+      contentType: file.type || "application/octet-stream",
+      customMetadata: { originalName: file.name || safeName }
+    });
+    const url = await snap.ref.getDownloadURL();
+    return {
+      ok: true,
+      file: {
+        id: path,
+        name: file.name || safeName,
+        url,
+        type: file.type || "",
+        size: file.size
+      }
+    };
+  } catch (e) {
+    console.warn("uploadContentFile:", e);
+    let msg = e.message || "Ошибка загрузки";
+    if (e.code === "storage/unauthorized") msg = "Нет прав на загрузку. Проверьте правила Storage и вход админа.";
+    return { ok: false, error: msg };
+  }
+}
+
+async function deleteContentFile(fileId) {
+  if (!_storage || !currentAdmin || !fileId) return false;
+  try {
+    await _storage.ref(fileId).delete();
+    return true;
+  } catch (e) {
+    // Файл мог уже быть удалён — не считаем критичной ошибкой
+    console.warn("deleteContentFile:", e);
+    return false;
+  }
 }
