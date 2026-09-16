@@ -294,10 +294,32 @@ function renderOnboarding() {
     const pass = document.getElementById("f-pass").value;
     const err = document.getElementById("login-error");
     if (!login || !pass) { err.textContent = "Введите логин и пароль"; return; }
+    err.style.color = "var(--danger)";
     err.textContent = "Вход…";
-    const res = await userSignIn(login, pass);
-    if (!res.ok) { err.textContent = res.error; return; }
-    // onAuthStateChange подхватит пользователя и вызовет applyAuthUser
+    try {
+      if (typeof userSignIn !== "function") {
+        err.textContent = "Ошибка: облако не загрузилось. Обновите страницу (Ctrl+F5).";
+        return;
+      }
+      const res = await userSignIn(login, pass);
+      if (!res || !res.ok) {
+        err.textContent = (res && res.error) ? res.error : "Неверный логин или пароль";
+        return;
+      }
+      err.style.color = "var(--muted)";
+      err.textContent = "Успешно, загружаем профиль…";
+      // на случай если onAuthStateChange не сработает
+      setTimeout(() => {
+        if (!STATE.userId) {
+          err.style.color = "var(--danger)";
+          err.textContent = "Вход прошёл, но профиль не загрузился. В Supabase: Authentication → Users — пользователь есть? Confirm email выключен? SQL-схема выполнена?";
+        }
+      }, 4000);
+    } catch (e) {
+      console.warn(e);
+      err.style.color = "var(--danger)";
+      err.textContent = "Ошибка: " + (e.message || String(e));
+    }
   };
   document.querySelector("[data-login]").addEventListener("click", go);
   document.getElementById("f-pass").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
@@ -955,9 +977,10 @@ function openAdminLogin() {
 // Вызывается из cloud.js при изменении статуса входа Firebase Auth
 async function applyAuthUser(user, adminUser) {
   if (!user) return;
-  const uid = user.uid;
+  const uid = user.id || user.uid; // Supabase: user.id, Firebase: user.uid
+  if (!uid) { console.warn("applyAuthUser: no uid", user); return; }
   let profile = null;
-  try { profile = await cloudLoadUser(uid); } catch (e) {}
+  try { profile = await cloudLoadUser(uid); } catch (e) { console.warn(e); }
   STATE.userId = uid;
   STATE.userName = (profile && profile.name) || user.email || "Пользователь";
   if (profile) {
@@ -970,7 +993,7 @@ async function applyAuthUser(user, adminUser) {
   }
   STATE.editMode = !!adminUser;
   Storage.save(STATE);
-  await syncFromCloud();
+  try { await syncFromCloud(); } catch (e) { console.warn("syncFromCloud", e); }
   render();
 }
 
