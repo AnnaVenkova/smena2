@@ -304,7 +304,7 @@ function renderOnboarding() {
   document.getElementById("f-login").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("f-pass").focus(); });
 }
 
-function syncFromCloud() {
+async function syncFromCloud() {
   if (!cloudReady) return;
   try {
     const [cloudCourses, cloudPortal, cloudUser] = await Promise.all([
