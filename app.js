@@ -308,13 +308,22 @@ function renderOnboarding() {
       }
       err.style.color = "var(--muted)";
       err.textContent = "Успешно, загружаем профиль…";
-      // на случай если onAuthStateChange не сработает
+      // Не ждём onAuthStateChange — применяем сессию сразу (обход зависания)
+      try {
+        if (res.user && typeof handleSession === "function") {
+          await handleSession(res.session || { user: res.user });
+        } else if (res.user && typeof applyAuthUser === "function") {
+          await applyAuthUser(res.user, null);
+        }
+      } catch (e2) {
+        console.warn(e2);
+      }
       setTimeout(() => {
         if (!STATE.userId) {
           err.style.color = "var(--danger)";
-          err.textContent = "Вход прошёл, но профиль не загрузился. В Supabase: Authentication → Users — пользователь есть? Confirm email выключен? SQL-схема выполнена?";
+          err.textContent = "Вход прошёл, но профиль не загрузился. Выполните SQL для role=admin (см. инструкцию).";
         }
-      }, 4000);
+      }, 5000);
     } catch (e) {
       console.warn(e);
       err.style.color = "var(--danger)";

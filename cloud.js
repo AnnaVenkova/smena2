@@ -40,11 +40,15 @@ function initCloud() {
 function initAuth() {
   if (!cloudReady || !_sb) { authReady = false; return; }
   authReady = true;
+  // getSession отдельно
   _sb.auth.getSession().then(({ data }) => {
-    handleSession(data.session || null);
-  });
+    setTimeout(() => handleSession(data.session || null), 0);
+  }).catch(e => console.warn("getSession", e));
+
+  // ВАЖНО: внутри onAuthStateChange нельзя сразу ходить в БД —
+  // у Supabase это вызывает deadlock (вход «зависает» без ошибки).
   _sb.auth.onAuthStateChange((_event, session) => {
-    handleSession(session);
+    setTimeout(() => handleSession(session), 0);
   });
 }
 
@@ -107,9 +111,9 @@ function authErrorMessage(e) {
 async function adminSignIn(email, password) {
   if (!authReady || !_sb) return { ok: false, error: "Вход не настроен" };
   try {
-    const { error } = await _sb.auth.signInWithPassword({ email: email.trim(), password });
+    const { data, error } = await _sb.auth.signInWithPassword({ email: email.trim(), password });
     if (error) return { ok: false, error: authErrorMessage(error) };
-    return { ok: true };
+    return { ok: true, user: data && data.user, session: data && data.session };
   } catch (e) {
     return { ok: false, error: authErrorMessage(e) };
   }
@@ -120,9 +124,9 @@ async function userSignIn(login, password) {
   const email = loginToEmail(login);
   if (!email || !password) return { ok: false, error: "Введите логин и пароль" };
   try {
-    const { error } = await _sb.auth.signInWithPassword({ email, password });
+    const { data, error } = await _sb.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, error: authErrorMessage(error) };
-    return { ok: true };
+    return { ok: true, user: data && data.user, session: data && data.session };
   } catch (e) {
     return { ok: false, error: authErrorMessage(e) };
   }
