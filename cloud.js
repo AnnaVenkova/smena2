@@ -161,9 +161,22 @@ async function adminCreateEmployee(login, password, displayName) {
   if (!name || name.length > 100) return { ok: false, error: "Укажите имя (до 100 символов)" };
 
   try {
-    const { data, error } = await _sb.functions.invoke("create-employee", {
+    // Имя функции в URL Supabase (у вас может быть super-api, если так создали)
+    const fnName = (typeof EDGE_CREATE_EMPLOYEE === "string" && EDGE_CREATE_EMPLOYEE)
+      ? EDGE_CREATE_EMPLOYEE
+      : "create-employee";
+    let data, error;
+    ({ data, error } = await _sb.functions.invoke(fnName, {
       body: { login: L, password, name }
-    });
+    }));
+    // fallback на super-api, если create-employee ещё не задеплоена
+    if (error && fnName === "create-employee") {
+      const second = await _sb.functions.invoke("super-api", {
+        body: { login: L, password, name }
+      });
+      data = second.data;
+      error = second.error;
+    }
     if (error) {
       console.warn(error);
       // fallback сообщение если функция не задеплоена
@@ -310,7 +323,18 @@ async function cloudDeleteUser(userId) {
     return { ok: false, error: "Нужен вход администратора" };
   }
   try {
-    const { data, error } = await _sb.functions.invoke("delete-employee", { body: { uid: userId } });
+    const delName = (typeof EDGE_DELETE_EMPLOYEE === "string" && EDGE_DELETE_EMPLOYEE)
+      ? EDGE_DELETE_EMPLOYEE
+      : "delete-employee";
+    let data, error;
+    ({ data, error } = await _sb.functions.invoke(delName, { body: { uid: userId } }));
+    if (error && delName === "delete-employee") {
+      const second = await _sb.functions.invoke("super-api", { body: { uid: userId, action: "delete" } });
+      // super-api without delete logic won't work — keep error
+      if (second && !second.error && second.data && second.data.ok) {
+        data = second.data; error = null;
+      }
+    }
     if (error) {
       console.warn(error);
       // fallback: удалить только профиль (вход по паролю останется, пока не удалите в Auth)
