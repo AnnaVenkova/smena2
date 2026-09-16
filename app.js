@@ -796,15 +796,21 @@ async function deleteUserProfile(u) {
     toast("Удаление доступно только вошедшему администратору", "warn");
     return;
   }
-  const sure = confirm(`Удалить профиль «${u.name || "Без имени"}» безвозвратно? Весь его прогресс, XP и результаты тестов будут стёрты.`);
+  if (u.role === "admin") {
+    toast("Администратора удалить нельзя", "warn");
+    return;
+  }
+  const label = (u.name || "Без имени") + (u.login ? " (@" + u.login + ")" : "");
+  const sure = confirm("Удалить «" + label + "» безвозвратно?\nПрогресс, XP и доступ в систему будут удалены.");
   if (!sure) return;
-  const ok = await cloudDeleteUser(u.id);
-  if (ok) {
-    toast("Профиль удалён", "badge");
+  toast("Удаление…", "badge");
+  const res = await cloudDeleteUser(u.id);
+  if (res && res.ok) {
+    toast(res.partial ? "Профиль удалён (вход в Auth удалите вручную)" : "Пользователь удалён", "badge");
     closeModal();
     loadAndRenderAdmin();
   } else {
-    toast("Не удалось удалить профиль", "warn");
+    toast((res && res.error) || "Не удалось удалить", "warn");
   }
 }
 

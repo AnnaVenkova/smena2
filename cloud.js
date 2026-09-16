@@ -306,18 +306,23 @@ async function cloudLoadAllUsers() {
 }
 
 async function cloudDeleteUser(userId) {
-  if (!cloudReady || !_sb || !currentAdmin) return false;
-  // Удаление из Auth требует service_role → Edge Function; из profiles можно удалить (cascade если настроен)
+  if (!cloudReady || !_sb || !currentAdmin) {
+    return { ok: false, error: "Нужен вход администратора" };
+  }
   try {
     const { data, error } = await _sb.functions.invoke("delete-employee", { body: { uid: userId } });
-    if (!error && data && !data.error) return true;
-    // fallback: только профиль
-    const { error: e2 } = await _sb.from("profiles").delete().eq("id", userId);
-    if (e2) throw e2;
-    return true;
+    if (error) {
+      console.warn(error);
+      // fallback: удалить только профиль (вход по паролю останется, пока не удалите в Auth)
+      const { error: e2 } = await _sb.from("profiles").delete().eq("id", userId);
+      if (e2) return { ok: false, error: error.message || "Ошибка удаления. Задеплойте Edge Function delete-employee." };
+      return { ok: true, partial: true };
+    }
+    if (data && data.error) return { ok: false, error: data.error };
+    return { ok: true };
   } catch (e) {
     console.warn("cloudDeleteUser failed:", e);
-    return false;
+    return { ok: false, error: e.message || String(e) };
   }
 }
 
