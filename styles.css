@@ -1,18 +1,17 @@
+/* ===== Font: Circe ===== */
 @font-face {
-  font-family: "circe";
-  src: url("fonts/circe-regular.ttf") format("ttf");
+  font-family: "Circe";
+  src: url("fonts/circe-regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: "circe-bold";
-  src: url("fonts/circe-bold.ttf") format("ttf");
+  font-family: "Circe";
+  src: url("fonts/circe-bold.ttf") format("truetype");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
-}
-
 }
 
 :root {
@@ -36,12 +35,12 @@ html, body { margin: 0; padding: 0; }
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: "circe", system-ui, -apple-system, sans-serif;
+  font-family: "Circe", system-ui, -apple-system, sans-serif;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: contain;
 }
 h1, h2, .display {
-  font-family: 'Google Sans Variable', sans-serif;
+  font-family: "Circe", sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
@@ -72,7 +71,7 @@ h1, h2, .display {
   margin-bottom: 18px;
 }
 .lvl-badge {
-  font-family: 'Google Sans Variable', sans-serif;
+  font-family: "Circe", sans-serif;
   background: var(--accent);
   color: #16181D;
   font-weight: 700;
@@ -127,7 +126,7 @@ h1, h2, .display {
 .station-dot {
   width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2);
   display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;
-  font-family: 'Google Sans Variable', sans-serif;
+  font-family: "Circe", sans-serif;
 }
 .station.done .station-dot { background: var(--success); color: #0a1512; }
 .station.current .station-dot { background: var(--accent); color: #16181D; }
@@ -158,14 +157,14 @@ h1, h2, .display {
 .opt:has(input:checked) { border-color: var(--accent); background: rgba(65,146,53,0.10); }
 
 /* ===== Buttons ===== */
-.btn-primary { background: var(--accent); color: #16181D; border: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 12px; cursor: pointer; font-family: 'Google Sans Variable', sans-serif; }
+.btn-primary { background: var(--accent); color: #16181D; border: none; font-weight: 700; font-size: 15px; padding: 14px; border-radius: 12px; cursor: pointer; font-family: "Circe", sans-serif; }
 .btn-block { width: 100%; margin-top: 8px; }
 .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px; }
 
 /* ===== Profile ===== */
 .profile-stats { display: flex; gap: 10px; margin-bottom: 20px; }
 .stat { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; text-align: center; }
-.stat-num { font-family: 'Google Sans Variable', sans-serif; font-size: 24px; font-weight: 700; color: var(--accent); }
+.stat-num { font-family: "Circe", sans-serif; font-size: 24px; font-weight: 700; color: var(--accent); }
 .stat-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 .section-title { font-size: 14px; color: var(--text-dim); margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.05em; }
 .badge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -182,7 +181,7 @@ h1, h2, .display {
   padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   max-width: 480px; margin: 0 auto;
 }
-.navbtn { flex: 1; background: none; border: none; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; cursor: pointer; padding: 6px; font-family: 'Google Sans Variable', sans-serif; }
+.navbtn { flex: 1; background: none; border: none; color: var(--text-dim); display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; cursor: pointer; padding: 6px; font-family: "Circe", sans-serif; }
 .navbtn .navicon { font-size: 19px; }
 .navbtn.active { color: var(--accent); }
 
