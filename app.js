@@ -561,15 +561,129 @@ function openLightbox(url) {
   document.body.appendChild(box);
 }
 
+
+// ===== RICH TEXT (форматирование как в Word) =====
+function isHtmlBody(s) {
+  return /<[a-z][\s\S]*>/i.test(String(s || ""));
+}
+
+function plainToHtml(text) {
+  const t = String(text || "").trim();
+  if (!t) return "<p><br></p>";
+  if (isHtmlBody(t)) return t;
+  return t.split(/\n\n+/).map(block => {
+    const lines = block.split("\n");
+    if (lines.every(l => l.trim().startsWith("- "))) {
+      return "<ul>" + lines.map(l => "<li>" + escapeHtml(l.replace(/^\s*-\s*/, "")) + "</li>").join("") + "</ul>";
+    }
+    return "<p>" + escapeHtml(block).replace(/\n/g, "<br>") + "</p>";
+  }).join("");
+}
+
+function sanitizeHtml(html) {
+  // Убираем скрипты и опасные обработчики; контент пишут только админы
+  let s = String(html || "");
+  s = s.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "");
+  s = s.replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "");
+  s = s.replace(/\son\w+\s*=\s*[^\s>]+/gi, "");
+  s = s.replace(/javascript:/gi, "");
+  return s;
+}
+
+function formatBodyHtml(body) {
+  if (!body) return "<p class=\"hint\">Нет текста</p>";
+  if (isHtmlBody(body)) return sanitizeHtml(body);
+  return plainToHtml(body);
+}
+
+function richEditorHtml(editorId, initialContent) {
+  const html = plainToHtml(initialContent || "");
+  return `
+    <div class="rte" data-rte="${editorId}">
+      <div class="rte-toolbar">
+        <button type="button" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
+        <button type="button" data-rte-cmd="italic" title="Курсив"><i>I</i></button>
+        <button type="button" data-rte-cmd="underline" title="Подчёркнутый"><u>U</u></button>
+        <span class="rte-sep"></span>
+        <button type="button" data-rte-cmd="justifyLeft" title="По левому краю">⬅</button>
+        <button type="button" data-rte-cmd="justifyCenter" title="По центру">⬌</button>
+        <button type="button" data-rte-cmd="justifyRight" title="По правому краю">➡</button>
+        <span class="rte-sep"></span>
+        <button type="button" data-rte-cmd="insertUnorderedList" title="Маркированный список">•≡</button>
+        <button type="button" data-rte-cmd="insertOrderedList" title="Нумерованный список">1.</button>
+        <span class="rte-sep"></span>
+        <select data-rte-font size="1" title="Шрифт">
+          <option value="">Шрифт</option>
+          <option value="Circe, sans-serif">Circe</option>
+          <option value="Arial, sans-serif">Arial</option>
+          <option value="Georgia, serif">Georgia</option>
+          <option value="'Times New Roman', serif">Times</option>
+          <option value="Verdana, sans-serif">Verdana</option>
+          <option value="'Courier New', monospace">Courier</option>
+        </select>
+        <select data-rte-size size="1" title="Размер">
+          <option value="">Размер</option>
+          <option value="2">Маленький</option>
+          <option value="3">Обычный</option>
+          <option value="4">Средний</option>
+          <option value="5">Большой</option>
+          <option value="6">Очень большой</option>
+        </select>
+        <span class="rte-sep"></span>
+        <button type="button" data-rte-cmd="removeFormat" title="Очистить формат">✕</button>
+      </div>
+      <div class="rte-area" id="${editorId}" contenteditable="true" spellcheck="true">${html}</div>
+    </div>`;
+}
+
+function bindRichEditor(editorId) {
+  const root = document.querySelector('[data-rte="' + editorId + '"]');
+  if (!root) return;
+  const area = document.getElementById(editorId);
+  root.querySelectorAll("[data-rte-cmd]").forEach(btn => {
+    btn.addEventListener("mousedown", e => e.preventDefault()); // сохранить выделение
+    btn.addEventListener("click", e => {
+      e.preventDefault();
+      area.focus();
+      document.execCommand(btn.dataset.rteCmd, false, null);
+    });
+  });
+  const fontSel = root.querySelector("[data-rte-font]");
+  if (fontSel) {
+    fontSel.addEventListener("change", () => {
+      if (!fontSel.value) return;
+      area.focus();
+      document.execCommand("fontName", false, fontSel.value);
+      fontSel.value = "";
+    });
+  }
+  const sizeSel = root.querySelector("[data-rte-size]");
+  if (sizeSel) {
+    sizeSel.addEventListener("change", () => {
+      if (!sizeSel.value) return;
+      area.focus();
+      document.execCommand("fontSize", false, sizeSel.value);
+      sizeSel.value = "";
+    });
+  }
+}
+
+function getRichEditorHtml(editorId) {
+  const el = document.getElementById(editorId);
+  if (!el) return "";
+  let html = el.innerHTML.trim();
+  if (!html || html === "<br>" || html === "<p><br></p>") return "";
+  return sanitizeHtml(html);
+}
+
 function renderLesson(courseId, moduleId) {
   const m = getModule(courseId, moduleId);
-  const paragraphs = (m.body || "").split("\n\n").map(t => `<p>${escapeHtml(t)}</p>`).join("");
   return `
     <div class="screen-header">
       <button class="back-btn" data-back-course="${courseId}">‹</button>
       <h1>${escapeHtml(m.title)}</h1>
     </div>
-    <div class="lesson-body">${paragraphs}</div>
+    <div class="lesson-body">${formatBodyHtml(m.body)}</div>
     ${renderAttachments(m.files)}
     <button class="btn-primary btn-block" data-complete-lesson="${courseId}|${moduleId}">Понятно, продолжить (+10 XP)</button>
   `;
@@ -629,18 +743,12 @@ function renderPortalList() {
 function renderArticle(articleId) {
   const a = STATE.portal.find(x => x.id === articleId);
   if (!a) return renderPortalList();
-  const paragraphs = (a.body || "").split("\n\n").map(t => {
-    if (t.startsWith("- ")) {
-      return "<ul>" + t.split("\n").map(li => `<li>${escapeHtml(li.replace(/^- /, ""))}</li>`).join("") + "</ul>";
-    }
-    return `<p>${escapeHtml(t)}</p>`;
-  }).join("");
   return `
     <div class="screen-header">
       <button class="back-btn" data-back-portal>‹</button>
       <h1>${escapeHtml(a.title)}</h1>
     </div>
-    <div class="lesson-body">${paragraphs}</div>
+    <div class="lesson-body">${formatBodyHtml(a.body)}</div>
     ${renderAttachments(a.files)}
     <button class="btn-ghost btn-block" data-export-article="${a.id}" style="margin-top:12px;">⬇️ Скачать в Word (.docx)</button>
   `;
@@ -1079,7 +1187,8 @@ function openModuleEditor(courseId, moduleId) {
       </label>
       <label><input type="checkbox" id="f-final-exam" ${m && m.isFinalExam ? "checked" : ""} style="width:auto;display:inline-block;margin-right:6px;">Это итоговый экзамен (результат уходит в Таблицу)</label>
       <div id="f-lesson-fields" style="${type === "lesson" ? "" : "display:none"}">
-        <label>Текст урока (абзацы через пустую строку)<textarea id="f-body" rows="6">${m && m.type === "lesson" ? escapeHtml(m.body) : ""}</textarea></label>
+        <div id="f-lesson-fields-label" style="font-size:13px;color:var(--text-dim);margin:8px 0 4px;">Текст урока</div>
+      <div id="f-body-wrap">${m && m.type === "lesson" ? richEditorHtml("f-body", m.body) : richEditorHtml("f-body", "")}</div>
         ${renderFilesEditor(filesRef.files, "f-mod-files")}
       </div>
       <div id="f-quiz-fields" style="${type === "quiz" ? "" : "display:none"}">
@@ -1101,6 +1210,7 @@ function openModuleEditor(courseId, moduleId) {
     document.getElementById("f-quiz-fields").style.display = typeSel.value === "quiz" ? "" : "none";
   });
 
+  bindRichEditor("f-body");
   bindFilesEditor("f-mod-files", filesRef, "lessons");
 
   modal.querySelector("[data-save-module]").addEventListener("click", () => {
@@ -1114,7 +1224,7 @@ function openModuleEditor(courseId, moduleId) {
         id: m ? m.id : "mod" + Date.now(),
         type: "lesson",
         title,
-        body: document.getElementById("f-body").value.trim(),
+        body: getRichEditorHtml("f-body"),
         isFinalExam,
         files: filesRef.files || []
       };
@@ -1160,7 +1270,8 @@ function openArticleEditor(articleId) {
       <label>Название<input id="f-atitle" value="${a ? escapeHtml(a.title) : ""}"></label>
       <label>Иконка (эмодзи)<input id="f-aicon" value="${a ? a.icon : "📄"}"></label>
       <label>Краткое описание<input id="f-asummary" value="${a ? escapeHtml(a.summary || "") : ""}"></label>
-      <label>Текст (абзацы через пустую строку; список — строки, начинающиеся с "- ")<textarea id="f-abody" rows="8">${a ? escapeHtml(a.body) : ""}</textarea></label>
+      <div style="font-size:13px;color:var(--text-dim);margin:8px 0 4px;">Текст материала</div>
+      ${richEditorHtml("f-abody", a ? a.body : "")}
       ${renderFilesEditor(filesRef.files, "f-art-files")}
       <div class="modal-actions">
         ${a ? `<button class="btn-ghost" style="color:var(--danger)" data-del-article="${a.id}">Удалить</button>` : ""}
@@ -1169,6 +1280,7 @@ function openArticleEditor(articleId) {
     </div>`;
   modal.classList.add("show");
 
+  bindRichEditor("f-abody");
   bindFilesEditor("f-art-files", filesRef, "portal");
 
   modal.querySelector("[data-save-article]").addEventListener("click", () => {
@@ -1180,7 +1292,7 @@ function openArticleEditor(articleId) {
       title,
       icon: document.getElementById("f-aicon").value.trim() || "📄",
       summary: document.getElementById("f-asummary").value.trim(),
-      body: document.getElementById("f-abody").value.trim(),
+      body: getRichEditorHtml("f-abody"),
       files: filesRef.files || []
     };
     if (a) {
