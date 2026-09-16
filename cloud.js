@@ -1,146 +1,323 @@
-// ===== CLOUD SYNC (Firebase Firestore) =====
-// true заменяется при сборке:
-//   preview (демо в чате) — false, облако отключено (сеть в песочнице ненадёжна)
-//   deploy (реальный сайт) — true, облако включено, если задан FIREBASE_CONFIG
+// ===== CLOUD SYNC (Supabase) =====
 const CLOUD_BUILD_ENABLED = true;
 
-let _db = null;
+let _sb = null;
 let cloudReady = false;
+let authReady = false;
+let currentAdmin = null;
+let currentAuthUser = null;
+
+function loginToEmail(login) {
+  const L = String(login || "").trim().toLowerCase();
+  if (!L) return "";
+  if (L.includes("@")) return L;
+  return L.replace(/[^a-z0-9._+-]/g, "") + "@smena.users";
+}
 
 function initCloud() {
   if (!CLOUD_BUILD_ENABLED) { cloudReady = false; return; }
-  if (typeof FIREBASE_CONFIG === "undefined" || !FIREBASE_CONFIG) { cloudReady = false; return; }
-  if (typeof firebase === "undefined") { cloudReady = false; return; }
+  if (typeof SUPABASE_CONFIG === "undefined" || !SUPABASE_CONFIG || !SUPABASE_CONFIG.url || !SUPABASE_CONFIG.anonKey) {
+    cloudReady = false;
+    return;
+  }
+  if (typeof supabase === "undefined") {
+    console.warn("Supabase SDK not loaded");
+    cloudReady = false;
+    return;
+  }
   try {
-    firebase.initializeApp(FIREBASE_CONFIG);
-    _db = firebase.firestore();
+    _sb = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    });
     cloudReady = true;
   } catch (e) {
-    console.warn("Firebase init failed:", e);
+    console.warn("Supabase init failed:", e);
     cloudReady = false;
   }
   initAuth();
-  initStorage();
 }
 
-// ===== ADMIN AUTH (Firebase Authentication — вход по email/паролю) =====
-let _auth = null;
-let authReady = false;
-let currentAdmin = null;
-
 function initAuth() {
-  if (!cloudReady || typeof firebase === "undefined" || !firebase.auth) { authReady = false; return; }
-  try {
-    _auth = firebase.auth();
-    authReady = true;
-    _auth.onAuthStateChanged(user => {
-      currentAdmin = user;
-      if (typeof onAdminAuthChange === "function") onAdminAuthChange(user);
-    });
-  } catch (e) {
-    console.warn("Firebase auth init failed:", e);
-    authReady = false;
+  if (!cloudReady || !_sb) { authReady = false; return; }
+  authReady = true;
+  _sb.auth.getSession().then(({ data }) => {
+    handleSession(data.session || null);
+  });
+  _sb.auth.onAuthStateChange((_event, session) => {
+    handleSession(session);
+  });
+}
+
+async function handleSession(session) {
+  currentAuthUser = session && session.user ? session.user : null;
+  currentAdmin = null;
+  if (currentAuthUser) {
+    try {
+      const role = await ensureUserProfileAndRole(currentAuthUser);
+      if (role === "admin") currentAdmin = currentAuthUser;
+    } catch (e) {
+      console.warn("role resolve failed:", e);
+    }
   }
+  if (typeof onAuthStateChange === "function") onAuthStateChange(currentAuthUser, currentAdmin);
+  if (typeof onAdminAuthChange === "function") onAdminAuthChange(currentAdmin);
+}
+
+async function ensureUserProfileAndRole(user) {
+  if (!_sb || !user) return "user";
+  const { data, error } = await _sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
+  if (error) console.warn(error);
+  if (data) return data.role === "admin" ? "admin" : "user";
+
+  // Профиля нет (триггер мог не сработать) — создаём
+  const email = (user.email || "").toLowerCase();
+  const isEmployeeSynth = email.endsWith("@smena.users");
+  const role = isEmployeeSynth ? "user" : "admin";
+  const login = isEmployeeSynth ? email.split("@")[0] : (email || user.id.slice(0, 8));
+  const name = (user.user_metadata && user.user_metadata.name) || login || "Пользователь";
+  await _sb.from("profiles").upsert({
+    id: user.id,
+    login,
+    name,
+    role,
+    xp: 0,
+    badges: [],
+    streak: 0,
+    progress: {},
+    updated_at: new Date().toISOString()
+  });
+  return role;
+}
+
+function authErrorMessage(e) {
+  const msg = (e && (e.message || e.error_description || e.msg)) || "";
+  const map = {
+    "Invalid login credentials": "Неверный логин или пароль",
+    "Email not confirmed": "Email не подтверждён (отключите Confirm email в Auth → Providers)",
+    "User already registered": "Такой логин уже занят",
+    "Password should be at least 6 characters": "Пароль не короче 6 символов",
+    "Signup is disabled": "Регистрация отключена — создавайте пользователей только через админку"
+  };
+  for (const k of Object.keys(map)) {
+    if (msg.toLowerCase().includes(k.toLowerCase())) return map[k];
+  }
+  return msg || "Ошибка входа";
 }
 
 async function adminSignIn(email, password) {
-  if (!authReady) return { ok: false, error: "Вход не настроен (см. README)" };
+  if (!authReady || !_sb) return { ok: false, error: "Вход не настроен" };
   try {
-    await _auth.signInWithEmailAndPassword(email, password);
+    const { error } = await _sb.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) return { ok: false, error: authErrorMessage(error) };
     return { ok: true };
   } catch (e) {
-    const messages = {
-      "auth/invalid-email": "Некорректный email",
-      "auth/user-not-found": "Такой пользователь не найден",
-      "auth/wrong-password": "Неверный пароль",
-      "auth/invalid-credential": "Неверный email или пароль",
-      "auth/too-many-requests": "Слишком много попыток, попробуйте позже"
-    };
-    return { ok: false, error: messages[e.code] || e.message };
+    return { ok: false, error: authErrorMessage(e) };
+  }
+}
+
+async function userSignIn(login, password) {
+  if (!authReady || !_sb) return { ok: false, error: "Облако не подключено" };
+  const email = loginToEmail(login);
+  if (!email || !password) return { ok: false, error: "Введите логин и пароль" };
+  try {
+    const { error } = await _sb.auth.signInWithPassword({ email, password });
+    if (error) return { ok: false, error: authErrorMessage(error) };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: authErrorMessage(e) };
   }
 }
 
 async function adminSignOut() {
-  if (!authReady) return;
-  try { await _auth.signOut(); } catch (e) { console.warn(e); }
+  if (!_sb) return;
+  try { await _sb.auth.signOut(); } catch (e) { console.warn(e); }
 }
 
-async function cloudLoadContent() {
-  if (!cloudReady) return null;
-  try {
-    const doc = await _db.collection("content").doc("main").get();
-    return doc.exists ? doc.data().courses : null;
-  } catch (e) { console.warn("cloudLoadContent failed:", e); return null; }
+async function authSignOut() {
+  return adminSignOut();
 }
 
-async function cloudSaveContent(courses) {
-  if (!cloudReady) return false;
-  try {
-    await _db.collection("content").doc("main").set({ courses, updatedAt: Date.now() });
-    return true;
-  } catch (e) { console.warn("cloudSaveContent failed:", e); return false; }
-}
+/**
+ * Создание сотрудника.
+ * Нужна Edge Function `create-employee` (см. ИНСТРУКЦИЮ) —
+ * из браузера нельзя безопасно использовать service_role ключ.
+ */
+async function adminCreateEmployee(login, password, displayName) {
+  if (!authReady || !currentAdmin || !_sb) {
+    return { ok: false, error: "Нужен вход администратора" };
+  }
+  const L = String(login || "").trim().toLowerCase();
+  if (!/^[a-z0-9._+-]{2,32}$/.test(L)) {
+    return { ok: false, error: "Логин: 2–32 символа, латиница, цифры, . _ + -" };
+  }
+  if (!password || password.length < 6) {
+    return { ok: false, error: "Пароль не короче 6 символов" };
+  }
+  const name = String(displayName || "").trim();
+  if (!name || name.length > 100) return { ok: false, error: "Укажите имя (до 100 символов)" };
 
-async function cloudLoadUser(userId) {
-  if (!cloudReady) return null;
   try {
-    const doc = await _db.collection("users").doc(userId).get();
-    return doc.exists ? doc.data() : null;
-  } catch (e) { console.warn("cloudLoadUser failed:", e); return null; }
-}
-
-async function cloudSaveUser(userId, data) {
-  if (!cloudReady) return false;
-  try {
-    await _db.collection("users").doc(userId).set({ ...data, updatedAt: Date.now() });
-    return true;
-  } catch (e) { console.warn("cloudSaveUser failed:", e); return false; }
-}
-
-async function cloudLoadAllUsers() {
-  if (!cloudReady) return [];
-  try {
-    const snap = await _db.collection("users").get();
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch (e) { console.warn("cloudLoadAllUsers failed:", e); return []; }
-}
-
-async function cloudDeleteUser(userId) {
-  if (!cloudReady) return false;
-  try {
-    await _db.collection("users").doc(userId).delete();
-    return true;
-  } catch (e) { console.warn("cloudDeleteUser failed:", e); return false; }
-}
-
-async function cloudLoadPortal() {
-  if (!cloudReady) return null;
-  try {
-    const doc = await _db.collection("content").doc("portal").get();
-    return doc.exists ? doc.data().articles : null;
-  } catch (e) { console.warn("cloudLoadPortal failed:", e); return null; }
-}
-
-async function cloudSavePortal(articles) {
-  if (!cloudReady) return false;
-  try {
-    await _db.collection("content").doc("portal").set({ articles, updatedAt: Date.now() });
-    return true;
-  } catch (e) { console.warn("cloudSavePortal failed:", e); return false; }
-}
-
-// ===== FIREBASE STORAGE (вложения: картинки, PDF, Word, PPT, Excel) =====
-let _storage = null;
-
-function initStorage() {
-  if (!cloudReady || typeof firebase === "undefined" || !firebase.storage) return;
-  try {
-    _storage = firebase.storage();
+    const { data, error } = await _sb.functions.invoke("create-employee", {
+      body: { login: L, password, name }
+    });
+    if (error) {
+      console.warn(error);
+      // fallback сообщение если функция не задеплоена
+      const hint = "Создайте Edge Function create-employee (см. ИНСТРУКЦИЮ) или добавьте пользователя вручную в Authentication → Users (email: " + loginToEmail(L) + ")";
+      return { ok: false, error: (error.message || "Ошибка вызова функции") + ". " + hint };
+    }
+    if (data && data.error) return { ok: false, error: data.error };
+    return { ok: true, uid: data && data.uid, login: L };
   } catch (e) {
-    console.warn("Firebase Storage init failed:", e);
+    console.warn(e);
+    return {
+      ok: false,
+      error: "Не удалось создать пользователя. Задеплойте Edge Function create-employee или создайте вручную в Authentication (email: " + loginToEmail(L) + ")"
+    };
   }
 }
 
+async function cloudLoadContent() {
+  if (!cloudReady || !_sb) return null;
+  try {
+    const { data, error } = await _sb.from("app_content").select("data").eq("id", "courses").maybeSingle();
+    if (error) throw error;
+    return data && Array.isArray(data.data) ? data.data : null;
+  } catch (e) {
+    console.warn("cloudLoadContent failed:", e);
+    return null;
+  }
+}
+
+async function cloudSaveContent(courses) {
+  if (!cloudReady || !_sb) return false;
+  try {
+    const { error } = await _sb.from("app_content").upsert({
+      id: "courses",
+      data: courses,
+      updated_at: new Date().toISOString()
+    });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn("cloudSaveContent failed:", e);
+    return false;
+  }
+}
+
+async function cloudLoadPortal() {
+  if (!cloudReady || !_sb) return null;
+  try {
+    const { data, error } = await _sb.from("app_content").select("data").eq("id", "portal").maybeSingle();
+    if (error) throw error;
+    return data && Array.isArray(data.data) ? data.data : null;
+  } catch (e) {
+    console.warn("cloudLoadPortal failed:", e);
+    return null;
+  }
+}
+
+async function cloudSavePortal(articles) {
+  if (!cloudReady || !_sb) return false;
+  try {
+    const { error } = await _sb.from("app_content").upsert({
+      id: "portal",
+      data: articles,
+      updated_at: new Date().toISOString()
+    });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn("cloudSavePortal failed:", e);
+    return false;
+  }
+}
+
+async function cloudLoadUser(userId) {
+  if (!cloudReady || !_sb || !userId) return null;
+  try {
+    const { data, error } = await _sb.from("profiles").select("*").eq("id", userId).maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      name: data.name,
+      login: data.login,
+      role: data.role,
+      xp: data.xp,
+      badges: data.badges || [],
+      streak: data.streak,
+      lastActiveDate: data.last_active_date,
+      progress: data.progress || {},
+      updatedAt: data.updated_at ? new Date(data.updated_at).getTime() : 0
+    };
+  } catch (e) {
+    console.warn("cloudLoadUser failed:", e);
+    return null;
+  }
+}
+
+async function cloudSaveUser(userId, data) {
+  if (!cloudReady || !_sb || !userId) return false;
+  try {
+    const row = {
+      id: userId,
+      updated_at: new Date().toISOString()
+    };
+    if (data.name !== undefined) row.name = data.name;
+    if (data.xp !== undefined) row.xp = data.xp;
+    if (data.badges !== undefined) row.badges = data.badges;
+    if (data.streak !== undefined) row.streak = data.streak;
+    if (data.lastActiveDate !== undefined) row.last_active_date = data.lastActiveDate;
+    if (data.progress !== undefined) row.progress = data.progress;
+    const { error } = await _sb.from("profiles").upsert(row);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn("cloudSaveUser failed:", e);
+    return false;
+  }
+}
+
+async function cloudLoadAllUsers() {
+  if (!cloudReady || !_sb) return [];
+  try {
+    const { data, error } = await _sb.from("profiles").select("*").order("updated_at", { ascending: false });
+    if (error) throw error;
+    return (data || []).map(d => ({
+      id: d.id,
+      name: d.name,
+      login: d.login,
+      role: d.role,
+      xp: d.xp,
+      badges: d.badges || [],
+      streak: d.streak,
+      lastActiveDate: d.last_active_date,
+      progress: d.progress || {},
+      updatedAt: d.updated_at ? new Date(d.updated_at).getTime() : 0
+    }));
+  } catch (e) {
+    console.warn("cloudLoadAllUsers failed:", e);
+    return [];
+  }
+}
+
+async function cloudDeleteUser(userId) {
+  if (!cloudReady || !_sb || !currentAdmin) return false;
+  // Удаление из Auth требует service_role → Edge Function; из profiles можно удалить (cascade если настроен)
+  try {
+    const { data, error } = await _sb.functions.invoke("delete-employee", { body: { uid: userId } });
+    if (!error && data && !data.error) return true;
+    // fallback: только профиль
+    const { error: e2 } = await _sb.from("profiles").delete().eq("id", userId);
+    if (e2) throw e2;
+    return true;
+  } catch (e) {
+    console.warn("cloudDeleteUser failed:", e);
+    return false;
+  }
+}
+
+// ===== STORAGE (вложения) =====
 const ALLOWED_MIME = [
   "image/jpeg", "image/png", "image/webp", "image/gif",
   "application/pdf",
@@ -151,7 +328,6 @@ const ALLOWED_MIME = [
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 ];
-
 const ALLOWED_EXT = /\.(jpe?g|png|webp|gif|pdf|docx?|pptx?|xlsx?)$/i;
 
 function isAllowedFile(file) {
@@ -178,7 +354,7 @@ function formatFileSize(bytes) {
 }
 
 async function uploadContentFile(file, folder = "lessons") {
-  if (!_storage) return { ok: false, error: "Storage не настроен. Подключите Firebase Storage." };
+  if (!cloudReady || !_sb) return { ok: false, error: "Storage не настроен" };
   if (!currentAdmin) return { ok: false, error: "Нужен вход администратора" };
   if (!isAllowedFile(file)) {
     return { ok: false, error: "Тип не поддерживается. Можно: картинки, PDF, Word, PowerPoint, Excel" };
@@ -186,45 +362,41 @@ async function uploadContentFile(file, folder = "lessons") {
   if (file.size > 25 * 1024 * 1024) {
     return { ok: false, error: "Файл больше 25 МБ" };
   }
-
   const safeName = (file.name || "file")
     .replace(/[^\w.\-а-яА-ЯёЁ ]/gi, "_")
     .replace(/\s+/g, "_")
     .slice(0, 80);
-  const path = `content/${folder}/${Date.now()}_${safeName}`;
-  const ref = _storage.ref(path);
-
+  const path = folder + "/" + Date.now() + "_" + safeName;
   try {
-    const snap = await ref.put(file, {
+    const { error } = await _sb.storage.from("content").upload(path, file, {
       contentType: file.type || "application/octet-stream",
-      customMetadata: { originalName: file.name || safeName }
+      upsert: false
     });
-    const url = await snap.ref.getDownloadURL();
+    if (error) throw error;
+    const { data: pub } = _sb.storage.from("content").getPublicUrl(path);
     return {
       ok: true,
       file: {
         id: path,
         name: file.name || safeName,
-        url,
+        url: pub.publicUrl,
         type: file.type || "",
         size: file.size
       }
     };
   } catch (e) {
     console.warn("uploadContentFile:", e);
-    let msg = e.message || "Ошибка загрузки";
-    if (e.code === "storage/unauthorized") msg = "Нет прав на загрузку. Проверьте правила Storage и вход админа.";
-    return { ok: false, error: msg };
+    return { ok: false, error: e.message || "Ошибка загрузки" };
   }
 }
 
 async function deleteContentFile(fileId) {
-  if (!_storage || !currentAdmin || !fileId) return false;
+  if (!cloudReady || !_sb || !currentAdmin || !fileId) return false;
   try {
-    await _storage.ref(fileId).delete();
+    const { error } = await _sb.storage.from("content").remove([fileId]);
+    if (error) throw error;
     return true;
   } catch (e) {
-    // Файл мог уже быть удалён — не считаем критичной ошибкой
     console.warn("deleteContentFile:", e);
     return false;
   }

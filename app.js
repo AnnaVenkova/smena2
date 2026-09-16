@@ -252,29 +252,59 @@ function render() {
 function renderOnboarding() {
   const root = document.getElementById("app");
   document.getElementById("bottomnav").style.display = "none";
+
+  // Без облака — старый локальный режим (только имя)
+  if (!cloudReady || !authReady) {
+    root.innerHTML = `
+      <div class="onboard">
+        <div class="onboard-emoji">🍕</div>
+        <h1>Смена+</h1>
+        <p class="onboard-sub">Локальный режим. Введите имя, чтобы начать. Для входа по логину/паролю подключите Supabase (см. ИНСТРУКЦИЮ).</p>
+        <input id="f-username" placeholder="Имя и фамилия" class="onboard-input">
+        <button class="btn-primary btn-block" data-start>Начать обучение</button>
+      </div>`;
+    document.getElementById("f-username").focus();
+    const goLocal = () => {
+      const name = document.getElementById("f-username").value.trim();
+      if (!name) { toast("Введите имя", "warn"); return; }
+      STATE.userId = "u_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      STATE.userName = name;
+      persist();
+      render();
+    };
+    document.querySelector("[data-start]").addEventListener("click", goLocal);
+    document.getElementById("f-username").addEventListener("keydown", e => { if (e.key === "Enter") goLocal(); });
+    return;
+  }
+
   root.innerHTML = `
     <div class="onboard">
-      <div class="onboard-emoji">🍕</div>
+      <div class="onboard-emoji">🔐</div>
       <h1>Смена+</h1>
-      <p class="onboard-sub">Обучение с геймификацией. Прежде чем начать — как вас зовут? Это нужно, чтобы наставник видел ваш прогресс.</p>
-      <input id="f-username" placeholder="Имя и фамилия" class="onboard-input">
-      <button class="btn-primary btn-block" data-start>Начать обучение</button>
+      <p class="onboard-sub">Вход по логину и паролю. Аккаунт создаёт администратор.</p>
+      <input id="f-login" placeholder="Логин" class="onboard-input" autocomplete="username">
+      <input id="f-pass" placeholder="Пароль" class="onboard-input" type="password" autocomplete="current-password" style="margin-top:10px">
+      <p class="hint" id="login-error" style="color:var(--danger);"></p>
+      <button class="btn-primary btn-block" data-login>Войти</button>
+      <p class="hint" style="margin-top:14px">Администратор? После входа откройте Профиль → Режим администратора.</p>
     </div>`;
-  document.getElementById("f-username").focus();
-  const go = () => {
-    const name = document.getElementById("f-username").value.trim();
-    if (!name) { toast("Введите имя", "warn"); return; }
-    STATE.userId = "u_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    STATE.userName = name;
-    persist();
-    syncFromCloud().then(render);
+  document.getElementById("f-login").focus();
+  const go = async () => {
+    const login = document.getElementById("f-login").value.trim();
+    const pass = document.getElementById("f-pass").value;
+    const err = document.getElementById("login-error");
+    if (!login || !pass) { err.textContent = "Введите логин и пароль"; return; }
+    err.textContent = "Вход…";
+    const res = await userSignIn(login, pass);
+    if (!res.ok) { err.textContent = res.error; return; }
+    // onAuthStateChange подхватит пользователя и вызовет applyAuthUser
   };
-  document.querySelector("[data-start]").addEventListener("click", go);
-  document.getElementById("f-username").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+  document.querySelector("[data-login]").addEventListener("click", go);
+  document.getElementById("f-pass").addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+  document.getElementById("f-login").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("f-pass").focus(); });
 }
 
-// ===== CLOUD SYNC ON LOAD =====
-async function syncFromCloud() {
+function syncFromCloud() {
   if (!cloudReady) return;
   try {
     const [cloudCourses, cloudPortal, cloudUser] = await Promise.all([
@@ -607,7 +637,7 @@ function renderProfile() {
       <span>${STATE.editMode ? ("Включён" + (currentAdmin ? " — вход как " + escapeHtml(currentAdmin.email) : " (локально, без входа)")) : "Выключен"}</span>
       <button class="btn-ghost" data-toggle-edit>${STATE.editMode ? "Выключить" : "Включить"}</button>
     </div>
-    ${!cloudReady || !authReady ? `<p class="hint" style="text-align:left;margin-top:8px;">Вход администратора не настроен — используется временный PIN-код. Для защищённого входа по email настройте Firebase Authentication (см. README).</p>` : ""}
+    ${!cloudReady || !authReady ? `<p class="hint" style="text-align:left;margin-top:8px;">Вход по логину/паролю через Supabase. Аккаунты сотрудников создаёт администратор в разделе «Админ».</p>` : ""}
     ${STATE.editMode ? `<button class="btn-ghost btn-block" data-goto-admin style="margin-top:10px;">📊 Прогресс всех пользователей</button>` : ""}
     <button class="btn-ghost btn-block" data-reset style="margin-top:24px;color:var(--danger)">Сбросить мой прогресс</button>
     <button class="btn-ghost btn-block" data-logout-user style="margin-top:10px;">🚪 Выйти из профиля (сменить пользователя)</button>
@@ -632,12 +662,26 @@ async function loadAndRenderAdmin() {
     body.innerHTML = `<p class="hint">Облако не подключено, поэтому видно только это устройство.<br><br>Чтобы видеть прогресс всех пользователей, настройте Firebase — см. README_установка.md.</p>`;
     return;
   }
-  const users = await cloudLoadAllUsers();
-  if (!users.length) { body.innerHTML = `<p class="hint">Пока никто не начал обучение.</p>`; return; }
+  if (!currentAdmin) {
+    body.innerHTML = `<p class="hint">Войдите как администратор (Профиль → Режим администратора), чтобы управлять пользователями и видеть прогресс.</p>`;
+    return;
+  }
 
+  const users = await cloudLoadAllUsers();
   users.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
-  const rows = users.map(u => {
+  const createForm = `
+    <div class="admin-create-card">
+      <h3 style="margin:0 0 10px;font-size:15px;">Создать сотрудника</h3>
+      <label>Логин (латиница)<input id="f-new-login" placeholder="ivanov" autocomplete="off"></label>
+      <label>Имя и фамилия<input id="f-new-name" placeholder="Иван Иванов" autocomplete="off"></label>
+      <label>Пароль<input id="f-new-pass" type="password" placeholder="минимум 6 символов" autocomplete="new-password"></label>
+      <p class="hint" id="create-user-error" style="color:var(--danger);text-align:left;margin:6px 0;"></p>
+      <button class="btn-primary btn-block" data-create-user>Создать аккаунт</button>
+      <p class="hint" style="text-align:left;margin-top:8px;">Сотрудник входит на экране входа по этому логину и паролю. Самостоятельно зарегистрироваться нельзя.</p>
+    </div>`;
+
+  const rows = users.length ? users.map(u => {
     const lvl = levelForXp(u.xp || 0);
     const courseSummaries = STATE.courses.map(c => {
       const p = (u.progress && u.progress[c.id]) || { completedModules: [] };
@@ -645,18 +689,39 @@ async function loadAndRenderAdmin() {
       return `${escapeHtml(c.icon)} ${done}/${c.modules.length}`;
     }).join(" · ");
     const lastSeen = u.updatedAt ? new Date(u.updatedAt).toLocaleString("ru-RU") : "—";
+    const roleTag = u.role === "admin" ? ' <span class="crit-flag">админ</span>' : "";
+    const loginTag = u.login ? `<span class="dim"> · @${escapeHtml(u.login)}</span>` : "";
     return `
       <div class="admin-user-card" data-user-detail="${u.id}">
         <div class="admin-user-top">
-          <span class="admin-user-name">${escapeHtml(u.name || "Без имени")}</span>
+          <span class="admin-user-name">${escapeHtml(u.name || "Без имени")}${roleTag}${loginTag}</span>
           <span class="lvl-badge small">Ур. ${lvl}</span>
         </div>
         <div class="admin-user-meta">${courseSummaries}</div>
         <div class="admin-user-meta dim">${u.xp || 0} XP · 🔥 ${u.streak || 0} · значков: ${(u.badges || []).length} · был(а): ${lastSeen}</div>
       </div>`;
-  }).join("");
+  }).join("") : `<p class="hint">Пока нет пользователей. Создайте первого сотрудника формой выше.</p>`;
 
-  body.innerHTML = `<div class="admin-list">${rows}</div>`;
+  body.innerHTML = createForm + `<h3 style="margin:18px 0 10px;font-size:15px;">Пользователи (${users.length})</h3><div class="admin-list">${rows}</div>`;
+
+  document.querySelector("[data-create-user]").addEventListener("click", async () => {
+    const login = document.getElementById("f-new-login").value.trim();
+    const name = document.getElementById("f-new-name").value.trim();
+    const pass = document.getElementById("f-new-pass").value;
+    const err = document.getElementById("create-user-error");
+    err.style.color = "var(--danger)";
+    err.textContent = "Создание…";
+    const res = await adminCreateEmployee(login, pass, name);
+    if (!res.ok) { err.textContent = res.error; return; }
+    err.style.color = "var(--accent)";
+    err.textContent = "Создан аккаунт @" + res.login;
+    document.getElementById("f-new-login").value = "";
+    document.getElementById("f-new-name").value = "";
+    document.getElementById("f-new-pass").value = "";
+    toast("Аккаунт создан: " + res.login, "badge");
+    loadAndRenderAdmin();
+  });
+
   document.querySelectorAll("[data-user-detail]").forEach(el => el.addEventListener("click", () => {
     const u = users.find(x => x.id === el.dataset.userDetail);
     showUserDetail(u);
@@ -697,7 +762,7 @@ function showUserDetail(u) {
 
 async function deleteUserProfile(u) {
   if (!authReady || !currentAdmin) {
-    toast("Удаление доступно только вошедшему администратору (Firebase Authentication)", "warn");
+    toast("Удаление доступно только вошедшему администратору", "warn");
     return;
   }
   const sure = confirm(`Удалить профиль «${u.name || "Без имени"}» безвозвратно? Весь его прогресс, XP и результаты тестов будут стёрты.`);
@@ -817,13 +882,23 @@ function showQuizResult(courseId, moduleId, r) {
 
 function logoutUser() {
   const msg = cloudReady
-    ? "Выйти из профиля? Ваш прогресс сохранён в облаке под именем «" + STATE.userName + "» и виден администратору. На этом устройстве откроется экран входа для нового пользователя."
-    : "Выйти из профиля? Прогресс на этом устройстве без облака не связан с именем — при следующем входе под тем же именем начнётся заново.";
+    ? "Выйти из аккаунта? Прогресс сохранён в облаке."
+    : "Выйти из профиля?";
   if (!confirm(msg)) return;
-  if (authReady && currentAdmin) adminSignOut();
   const keepCourses = STATE.courses, keepPortal = STATE.portal;
+  if (authReady && (currentAdmin || currentAuthUser)) {
+    authSignOut().then(() => {
+      STATE = defaultState();
+      STATE.courses = keepCourses;
+      STATE.portal = keepPortal;
+      Storage.save(STATE);
+      render();
+    });
+    return;
+  }
   STATE = defaultState();
-  STATE.courses = keepCourses; STATE.portal = keepPortal;
+  STATE.courses = keepCourses;
+  STATE.portal = keepPortal;
   Storage.save(STATE);
   render();
 }
@@ -840,7 +915,7 @@ function toggleEditMode() {
     openAdminLogin();
   } else {
     // облако/вход не настроены — временный локальный PIN (см. предупреждение в профиле)
-    const pin = prompt("Вход администратора не настроен (см. README). Временный PIN (по умолчанию 1234):");
+    const pin = prompt("Вход администратора не настроен. Временный PIN (по умолчанию 1234):");
     if (pin !== "1234") { toast("Неверный PIN", "warn"); return; }
     STATE.editMode = true;
     persist(); render();
@@ -878,17 +953,37 @@ function openAdminLogin() {
 }
 
 // Вызывается из cloud.js при изменении статуса входа Firebase Auth
+async function applyAuthUser(user, adminUser) {
+  if (!user) return;
+  const uid = user.uid;
+  let profile = null;
+  try { profile = await cloudLoadUser(uid); } catch (e) {}
+  STATE.userId = uid;
+  STATE.userName = (profile && profile.name) || user.email || "Пользователь";
+  if (profile) {
+    STATE.xp = profile.xp ?? STATE.xp;
+    STATE.badges = profile.badges ?? STATE.badges;
+    STATE.streak = profile.streak ?? STATE.streak;
+    STATE.lastActiveDate = profile.lastActiveDate ?? STATE.lastActiveDate;
+    STATE.progress = profile.progress ?? STATE.progress;
+    if (profile.name) STATE.userName = profile.name;
+  }
+  STATE.editMode = !!adminUser;
+  Storage.save(STATE);
+  await syncFromCloud();
+  render();
+}
+
+function onAuthStateChange(user, adminUser) {
+  applyAuthUser(user, adminUser);
+}
+
 function onAdminAuthChange(user) {
   const wasEdit = STATE.editMode;
   STATE.editMode = !!user;
-  if (STATE.editMode !== wasEdit) {
-    persist();
-    if (document.getElementById("app")) render();
-    if (user) toast("Вход выполнен: " + user.email, "badge");
-  }
+  if (STATE.editMode !== wasEdit && STATE.userId) render();
 }
 
-// ===== EDIT MODALS: курсы и модули =====
 function openCourseEditor(courseId) {
   const c = courseId ? getCourse(courseId) : null;
   const modal = document.getElementById("modal");
@@ -1182,6 +1277,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   initCloud();
   document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
   render();
-  if (ACCESS_OK && STATE.userId) await syncFromCloud();
-  render();
+  // Если уже есть Firebase-сессия — onAuthStateChange сам подставит пользователя
+  if (ACCESS_OK && STATE.userId && !(authReady && currentAuthUser)) {
+    await syncFromCloud();
+    render();
+  }
 });
