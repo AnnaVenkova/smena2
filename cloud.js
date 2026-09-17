@@ -146,7 +146,7 @@ async function authSignOut() {
  * Нужна Edge Function `create-employee` (см. ИНСТРУКЦИЮ) —
  * из браузера нельзя безопасно использовать service_role ключ.
  */
-async function adminCreateEmployee(login, password, displayName) {
+async function adminCreateEmployee(login, password, displayName, positionId) {
   if (!authReady || !currentAdmin || !_sb) {
     return { ok: false, error: "Нужен вход администратора" };
   }
@@ -167,12 +167,12 @@ async function adminCreateEmployee(login, password, displayName) {
       : "create-employee";
     let data, error;
     ({ data, error } = await _sb.functions.invoke(fnName, {
-      body: { login: L, password, name }
+      body: { login: L, password, name, positionId: positionId || null }
     }));
     // fallback на super-api, если create-employee ещё не задеплоена
     if (error && fnName === "create-employee") {
       const second = await _sb.functions.invoke("super-api", {
-        body: { login: L, password, name }
+        body: { login: L, password, name, positionId: positionId || null }
       });
       data = second.data;
       error = second.error;
@@ -184,6 +184,9 @@ async function adminCreateEmployee(login, password, displayName) {
       return { ok: false, error: (error.message || "Ошибка вызова функции") + ". " + hint };
     }
     if (data && data.error) return { ok: false, error: data.error };
+    if (positionId && data && data.uid) {
+      try { await _sb.from("profiles").update({ position_id: positionId }).eq("id", data.uid); } catch (e) {}
+    }
     return { ok: true, uid: data && data.uid, login: L };
   } catch (e) {
     console.warn(e);
@@ -191,6 +194,35 @@ async function adminCreateEmployee(login, password, displayName) {
       ok: false,
       error: "Не удалось создать пользователя. Задеплойте Edge Function create-employee или создайте вручную в Authentication (email: " + loginToEmail(L) + ")"
     };
+  }
+}
+
+
+async function cloudLoadPositions() {
+  if (!cloudReady || !_sb) return null;
+  try {
+    const { data, error } = await _sb.from("app_content").select("data").eq("id", "positions").maybeSingle();
+    if (error) throw error;
+    return data && Array.isArray(data.data) ? data.data : [];
+  } catch (e) {
+    console.warn("cloudLoadPositions", e);
+    return null;
+  }
+}
+
+async function cloudSavePositions(positions) {
+  if (!cloudReady || !_sb) return false;
+  try {
+    const { error } = await _sb.from("app_content").upsert({
+      id: "positions",
+      data: positions || [],
+      updated_at: new Date().toISOString()
+    });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn("cloudSavePositions", e);
+    return false;
   }
 }
 
@@ -260,6 +292,7 @@ async function cloudLoadUser(userId) {
       name: data.name,
       login: data.login,
       role: data.role,
+      positionId: data.position_id || null,
       xp: data.xp,
       badges: data.badges || [],
       streak: data.streak,
@@ -286,6 +319,7 @@ async function cloudSaveUser(userId, data) {
     if (data.streak !== undefined) row.streak = data.streak;
     if (data.lastActiveDate !== undefined) row.last_active_date = data.lastActiveDate;
     if (data.progress !== undefined) row.progress = data.progress;
+    if (data.positionId !== undefined) row.position_id = data.positionId;
     const { error } = await _sb.from("profiles").upsert(row);
     if (error) throw error;
     return true;
@@ -305,6 +339,7 @@ async function cloudLoadAllUsers() {
       name: d.name,
       login: d.login,
       role: d.role,
+      positionId: d.position_id || null,
       xp: d.xp,
       badges: d.badges || [],
       streak: d.streak,
@@ -364,8 +399,8 @@ const ALLOWED_MIME = [
 const ALLOWED_EXT = /\.(jpe?g|png|webp|gif|pdf|docx?|pptx?|xlsx?)$/i;
 
 function isAllowedFile(file) {
-  if (ALLOWED_MIME.includes(file.type)) return true;
-  return ALLOWED_EXT.test(file.name || "");
+  if (file && file.type && ALLOWED_MIME.includes(file.type)) return true;
+  return ALLOWED_EXT.test((file && file.name) || "");
 }
 
 function fileIconFor(name, type) {
@@ -419,7 +454,14 @@ async function uploadContentFile(file, folder = "lessons") {
     };
   } catch (e) {
     console.warn("uploadContentFile:", e);
-    return { ok: false, error: e.message || "Ошибка загрузки" };
+    const msg = (e && (e.message || e.error || e.error_description)) || String(e);
+    if (/bucket not found|NoSuchBucket/i.test(msg)) {
+      return { ok: false, error: "В Supabase нет хранилища «content». Выполните SQL из инструкции (Storage bucket)." };
+    }
+    if (/row-level security|RLS|policy|not allowed|403|401/i.test(msg)) {
+      return { ok: false, error: "Нет прав на загрузку. Войдите как администратор (role=admin в profiles)." };
+    }
+    return { ok: false, error: msg || "Ошибка загрузки" };
   }
 }
 

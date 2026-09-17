@@ -19,6 +19,8 @@ function defaultState() {
   return {
     userId: null,
     userName: null,
+    userPositionId: null,
+    positions: [],
     courses: JSON.parse(JSON.stringify(SEED_COURSES)),
     portal: JSON.parse(JSON.stringify(SEED_PORTAL)),
     progress: {},
@@ -35,6 +37,8 @@ SEED_COURSES.forEach(sc => {
   if (!STATE.courses.find(c => c.id === sc.id)) STATE.courses.push(JSON.parse(JSON.stringify(sc)));
 });
 if (!STATE.portal) STATE.portal = JSON.parse(JSON.stringify(SEED_PORTAL));
+if (!Array.isArray(STATE.positions)) STATE.positions = [];
+if (STATE.userPositionId === undefined) STATE.userPositionId = null;
 
 function persist() {
   Storage.save(STATE);
@@ -55,12 +59,64 @@ function persistContent() {
   if (cloudReady && STATE.editMode) {
     cloudSaveContent(STATE.courses);
     cloudSavePortal(STATE.portal);
+    if (typeof cloudSavePositions === "function") cloudSavePositions(STATE.positions || []);
   }
 }
 
 function courseProgress(courseId) {
   if (!STATE.progress[courseId]) STATE.progress[courseId] = { completedModules: [], quizResults: {} };
   return STATE.progress[courseId];
+}
+
+
+// ===== ДОЛЖНОСТИ (роли для доступа к курсам) =====
+function getPosition(id) {
+  return (STATE.positions || []).find(p => p.id === id) || null;
+}
+function positionTitle(id) {
+  const p = getPosition(id);
+  return p ? p.title : "";
+}
+/** Курсы, доступные текущему пользователю. Админ видит все. */
+function visibleCourses() {
+  if (STATE.editMode) return STATE.courses;
+  const pid = STATE.userPositionId;
+  return STATE.courses.filter(c => {
+    const ids = c.positionIds;
+    if (!ids || !ids.length) return true; // пустой список = доступно всем
+    if (!pid) return false; // нет должности — только «общие» курсы уже отфильтрованы выше
+    return ids.includes(pid);
+  });
+}
+function canAccessCourse(courseId) {
+  if (STATE.editMode) return true;
+  const c = getCourse(courseId);
+  if (!c) return false;
+  const ids = c.positionIds;
+  if (!ids || !ids.length) return true;
+  return !!(STATE.userPositionId && ids.includes(STATE.userPositionId));
+}
+function positionsCheckboxesHtml(selectedIds, nameAttr) {
+  const list = STATE.positions || [];
+  if (!list.length) {
+    return `<p class="hint" style="text-align:left">Сначала создайте должности в разделе Админ.</p>`;
+  }
+  const sel = selectedIds || [];
+  return list.map(p => `
+    <label class="pos-check">
+      <input type="checkbox" name="${nameAttr}" value="${escapeHtml(p.id)}" ${sel.includes(p.id) ? "checked" : ""}>
+      ${escapeHtml(p.title)}
+    </label>`).join("");
+}
+function readCheckedPositions(nameAttr) {
+  return Array.from(document.querySelectorAll(`input[name="${nameAttr}"]:checked`)).map(el => el.value);
+}
+function positionsSelectHtml(selectedId, selectId) {
+  const opts = [`<option value="">— не назначена —</option>`]
+    .concat((STATE.positions || []).map(p =>
+      `<option value="${escapeHtml(p.id)}" ${selectedId === p.id ? "selected" : ""}>${escapeHtml(p.title)}</option>`
+    ));
+  return `<select id="${selectId}">${opts.join("")}</select>`;
 }
 
 function getCourse(id) { return STATE.courses.find(c => c.id === id); }
@@ -338,16 +394,20 @@ function renderOnboarding() {
 async function syncFromCloud() {
   if (!cloudReady) return;
   try {
-    const [cloudCourses, cloudPortal, cloudUser] = await Promise.all([
+    const [cloudCourses, cloudPortal, cloudUser, cloudPositions] = await Promise.all([
       cloudLoadContent(),
       cloudLoadPortal(),
-      STATE.userId ? cloudLoadUser(STATE.userId) : null
+      STATE.userId ? cloudLoadUser(STATE.userId) : null,
+      typeof cloudLoadPositions === "function" ? cloudLoadPositions() : null
     ]);
     if (cloudCourses && cloudCourses.length) STATE.courses = cloudCourses;
     else cloudSaveContent(STATE.courses);
 
     if (cloudPortal && cloudPortal.length) STATE.portal = cloudPortal;
     else cloudSavePortal(STATE.portal);
+
+    if (cloudPositions && Array.isArray(cloudPositions)) STATE.positions = cloudPositions;
+    else if (typeof cloudSavePositions === "function") cloudSavePositions(STATE.positions || []);
 
     if (cloudUser) {
       STATE.xp = cloudUser.xp ?? STATE.xp;
@@ -356,6 +416,7 @@ async function syncFromCloud() {
       STATE.lastActiveDate = cloudUser.lastActiveDate ?? STATE.lastActiveDate;
       STATE.progress = cloudUser.progress ?? STATE.progress;
       if (cloudUser.name) STATE.userName = cloudUser.name;
+      if (cloudUser.positionId !== undefined) STATE.userPositionId = cloudUser.positionId;
     }
     Storage.save(STATE);
   } catch (e) { console.warn("syncFromCloud failed:", e); }
@@ -377,7 +438,8 @@ function renderTopStats() {
 }
 
 function renderCourseList() {
-  const cards = STATE.courses.map(c => {
+  const list = visibleCourses();
+  const cards = list.map(c => {
     const p = courseProgress(c.id);
     const total = c.modules.length;
     const done = c.modules.filter(m => p.completedModules.includes(m.id)).length;
@@ -402,11 +464,16 @@ function renderCourseList() {
       ${STATE.editMode ? `<button class="btn-ghost" data-add-course>+ Курс</button>` : ""}
     </div>
     <div class="hello-row">Здравствуйте, ${escapeHtml(STATE.userName)}${cloudReady ? '<span class="sync-dot" title="Синхронизировано">●</span>' : ""}</div>
-    <div class="course-list">${cards}</div>
+    <div class="course-list">${cards || `<p class="hint">Нет доступных курсов для вашей должности. Обратитесь к администратору.</p>`}</div>
+    ${STATE.userPositionId && !STATE.editMode ? `<p class="hint" style="margin-top:10px">Должность: ${escapeHtml(positionTitle(STATE.userPositionId) || "—")}</p>` : ""}
   `;
 }
 
 function renderCourseDetail(courseId) {
+  if (!canAccessCourse(courseId)) {
+    toast("Этот курс недоступен для вашей должности", "warn");
+    return renderCourseList();
+  }
   const c = getCourse(courseId);
   if (!c) return renderCourseList();
   const p = courseProgress(courseId);
@@ -608,6 +675,7 @@ function richEditorHtml(editorId, initialContent) {
         <button type="button" data-rte-cmd="justifyLeft" title="По левому краю">⬅</button>
         <button type="button" data-rte-cmd="justifyCenter" title="По центру">⬌</button>
         <button type="button" data-rte-cmd="justifyRight" title="По правому краю">➡</button>
+        <button type="button" data-rte-cmd="justifyFull" title="По ширине">☰</button>
         <span class="rte-sep"></span>
         <button type="button" data-rte-cmd="insertUnorderedList" title="Маркированный список">•≡</button>
         <button type="button" data-rte-cmd="insertOrderedList" title="Нумерованный список">1.</button>
@@ -628,6 +696,14 @@ function richEditorHtml(editorId, initialContent) {
           <option value="4">Средний</option>
           <option value="5">Большой</option>
           <option value="6">Очень большой</option>
+        </select>
+        <select data-rte-anim size="1" title="Анимация">
+          <option value="">Анимация</option>
+          <option value="anim-fade">Появление</option>
+          <option value="anim-slide">Сдвиг</option>
+          <option value="anim-zoom">Увеличение</option>
+          <option value="anim-pulse">Пульс</option>
+          <option value="anim-none">Убрать анимацию</option>
         </select>
         <span class="rte-sep"></span>
         <button type="button" data-rte-cmd="removeFormat" title="Очистить формат">✕</button>
@@ -666,6 +742,65 @@ function bindRichEditor(editorId) {
       sizeSel.value = "";
     });
   }
+  const animSel = root.querySelector("[data-rte-anim]");
+  if (animSel) {
+    animSel.addEventListener("mousedown", e => e.preventDefault());
+    animSel.addEventListener("change", () => {
+      const val = animSel.value;
+      if (!val) return;
+      area.focus();
+      applyRteAnimation(val);
+      animSel.value = "";
+    });
+  }
+}
+
+function applyRteAnimation(animClass) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (animClass === "anim-none") {
+    // снять классы анимации с выделенных span
+    const container = range.commonAncestorContainer;
+    const root = container.nodeType === 1 ? container : container.parentElement;
+    if (!root) return;
+    root.querySelectorAll("[class*='anim-']").forEach(el => {
+      if (sel.containsNode(el, true)) {
+        el.classList.remove("anim-fade", "anim-slide", "anim-zoom", "anim-pulse");
+        if (!el.className.trim() && el.tagName === "SPAN") {
+          const parent = el.parentNode;
+          while (el.firstChild) parent.insertBefore(el.firstChild, el);
+          parent.removeChild(el);
+        }
+      }
+    });
+    return;
+  }
+  if (range.collapsed) {
+    // нет выделения — обернуть текущий блок
+    let block = range.startContainer;
+    if (block.nodeType === 3) block = block.parentElement;
+    while (block && block !== document.body && !/^(P|DIV|LI|H[1-6])$/i.test(block.tagName)) {
+      block = block.parentElement;
+    }
+    if (block && block.classList) {
+      block.classList.remove("anim-fade", "anim-slide", "anim-zoom", "anim-pulse");
+      block.classList.add(animClass);
+    }
+    return;
+  }
+  try {
+    const span = document.createElement("span");
+    span.className = animClass;
+    range.surroundContents(span);
+  } catch (e) {
+    // если выделение пересекает несколько блоков — применить к общему предку
+    const frag = range.extractContents();
+    const span = document.createElement("span");
+    span.className = animClass;
+    span.appendChild(frag);
+    range.insertNode(span);
+  }
 }
 
 function getRichEditorHtml(editorId) {
@@ -683,7 +818,7 @@ function renderLesson(courseId, moduleId) {
       <button class="back-btn" data-back-course="${courseId}">‹</button>
       <h1>${escapeHtml(m.title)}</h1>
     </div>
-    <div class="lesson-body">${formatBodyHtml(m.body)}</div>
+    <div class="lesson-body anim-enter">${formatBodyHtml(m.body)}</div>
     ${renderAttachments(m.files)}
     <button class="btn-primary btn-block" data-complete-lesson="${courseId}|${moduleId}">Понятно, продолжить (+10 XP)</button>
   `;
@@ -748,7 +883,7 @@ function renderArticle(articleId) {
       <button class="back-btn" data-back-portal>‹</button>
       <h1>${escapeHtml(a.title)}</h1>
     </div>
-    <div class="lesson-body">${formatBodyHtml(a.body)}</div>
+    <div class="lesson-body anim-enter">${formatBodyHtml(a.body)}</div>
     ${renderAttachments(a.files)}
     <button class="btn-ghost btn-block" data-export-article="${a.id}" style="margin-top:12px;">⬇️ Скачать в Word (.docx)</button>
   `;
@@ -809,15 +944,29 @@ async function loadAndRenderAdmin() {
   const users = await cloudLoadAllUsers();
   users.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
+  const posList = (STATE.positions || []).map(p => `
+    <div class="pos-admin-row">
+      <span>${escapeHtml(p.title)}</span>
+      <button type="button" class="btn-ghost" data-del-pos="${p.id}" style="color:var(--danger);padding:4px 8px">Удалить</button>
+    </div>`).join("") || `<p class="hint">Пока нет должностей</p>`;
+
   const createForm = `
+    <div class="admin-create-card">
+      <h3 style="margin:0 0 10px;font-size:15px;">Должности</h3>
+      <div class="pos-admin-list">${posList}</div>
+      <label>Новая должность<input id="f-new-pos" placeholder="Например: Мастер смены" autocomplete="off"></label>
+      <button class="btn-ghost btn-block" data-add-pos style="margin-top:8px">+ Добавить должность</button>
+      <p class="hint" style="text-align:left;margin-top:8px">Затем в настройках курса отметьте, каким должностям он доступен.</p>
+    </div>
     <div class="admin-create-card">
       <h3 style="margin:0 0 10px;font-size:15px;">Создать сотрудника</h3>
       <label>Логин (латиница)<input id="f-new-login" placeholder="ivanov" autocomplete="off"></label>
       <label>Имя и фамилия<input id="f-new-name" placeholder="Иван Иванов" autocomplete="off"></label>
+      <label>Должность${positionsSelectHtml("", "f-new-pos-id")}</label>
       <label>Пароль<input id="f-new-pass" type="password" placeholder="минимум 6 символов" autocomplete="new-password"></label>
       <p class="hint" id="create-user-error" style="color:var(--danger);text-align:left;margin:6px 0;"></p>
       <button class="btn-primary btn-block" data-create-user>Создать аккаунт</button>
-      <p class="hint" style="text-align:left;margin-top:8px;">Сотрудник входит на экране входа по этому логину и паролю. Самостоятельно зарегистрироваться нельзя.</p>
+      <p class="hint" style="text-align:left;margin-top:8px;">Сотрудник входит по логину и паролю. Курсы видит только по своей должности.</p>
     </div>`;
 
   const rows = users.length ? users.map(u => {
@@ -830,10 +979,11 @@ async function loadAndRenderAdmin() {
     const lastSeen = u.updatedAt ? new Date(u.updatedAt).toLocaleString("ru-RU") : "—";
     const roleTag = u.role === "admin" ? ' <span class="crit-flag">админ</span>' : "";
     const loginTag = u.login ? `<span class="dim"> · @${escapeHtml(u.login)}</span>` : "";
+    const posTag = u.positionId ? `<span class="dim"> · ${escapeHtml(positionTitle(u.positionId) || u.positionId)}</span>` : "";
     return `
       <div class="admin-user-card" data-user-detail="${u.id}">
         <div class="admin-user-top">
-          <span class="admin-user-name">${escapeHtml(u.name || "Без имени")}${roleTag}${loginTag}</span>
+          <span class="admin-user-name">${escapeHtml(u.name || "Без имени")}${roleTag}${loginTag}${posTag}</span>
           <span class="lvl-badge small">Ур. ${lvl}</span>
         </div>
         <div class="admin-user-meta">${courseSummaries}</div>
@@ -843,14 +993,38 @@ async function loadAndRenderAdmin() {
 
   body.innerHTML = createForm + `<h3 style="margin:18px 0 10px;font-size:15px;">Пользователи (${users.length})</h3><div class="admin-list">${rows}</div>`;
 
+  const addPosBtn = document.querySelector("[data-add-pos]");
+  if (addPosBtn) addPosBtn.addEventListener("click", () => {
+    const title = document.getElementById("f-new-pos").value.trim();
+    if (!title) { toast("Введите название должности", "warn"); return; }
+    STATE.positions = STATE.positions || [];
+    STATE.positions.push({ id: "pos" + Date.now(), title });
+    persistContent();
+    toast("Должность добавлена", "badge");
+    loadAndRenderAdmin();
+  });
+  document.querySelectorAll("[data-del-pos]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.delPos;
+      if (!confirm("Удалить должность «" + positionTitle(id) + "»?")) return;
+      STATE.positions = (STATE.positions || []).filter(p => p.id !== id);
+      STATE.courses.forEach(c => {
+        if (c.positionIds) c.positionIds = c.positionIds.filter(x => x !== id);
+      });
+      persistContent();
+      loadAndRenderAdmin();
+    });
+  });
+
   document.querySelector("[data-create-user]").addEventListener("click", async () => {
     const login = document.getElementById("f-new-login").value.trim();
     const name = document.getElementById("f-new-name").value.trim();
     const pass = document.getElementById("f-new-pass").value;
+    const positionId = (document.getElementById("f-new-pos-id") || {}).value || "";
     const err = document.getElementById("create-user-error");
     err.style.color = "var(--danger)";
     err.textContent = "Создание…";
-    const res = await adminCreateEmployee(login, pass, name);
+    const res = await adminCreateEmployee(login, pass, name, positionId || null);
     if (!res.ok) { err.textContent = res.error; return; }
     err.style.color = "var(--accent)";
     err.textContent = "Создан аккаунт @" + res.login;
@@ -896,6 +1070,25 @@ function showUserDetail(u) {
   modal.classList.add("show");
   modal.querySelector("[data-close-modal]").addEventListener("click", closeModal);
   modal.querySelector("[data-export-user]").addEventListener("click", () => exportUserToSheets(u));
+  const posBlock = `
+    <div class="pos-block" style="margin:12px 0">
+      <div class="pos-block-title">Должность</div>
+      ${positionsSelectHtml(u.positionId || "", "f-user-pos")}
+      <button class="btn-primary btn-block" data-save-user-pos style="margin-top:8px">Сохранить должность</button>
+    </div>`;
+  const actions = modal.querySelector(".modal-actions");
+  if (actions) actions.insertAdjacentHTML("beforebegin", posBlock);
+  const savePos = modal.querySelector("[data-save-user-pos]");
+  if (savePos) savePos.addEventListener("click", async () => {
+    const positionId = document.getElementById("f-user-pos").value || null;
+    const ok = await cloudSaveUser(u.id, { positionId });
+    if (ok) {
+      u.positionId = positionId;
+      toast("Должность сохранена", "badge");
+      closeModal();
+      loadAndRenderAdmin();
+    } else toast("Не удалось сохранить", "warn");
+  });
   modal.querySelector("[data-delete-user]").addEventListener("click", () => deleteUserProfile(u));
 }
 
@@ -1113,6 +1306,7 @@ async function applyAuthUser(user, adminUser) {
     STATE.lastActiveDate = profile.lastActiveDate ?? STATE.lastActiveDate;
     STATE.progress = profile.progress ?? STATE.progress;
     if (profile.name) STATE.userName = profile.name;
+    if (profile.positionId !== undefined) STATE.userPositionId = profile.positionId;
   }
   STATE.editMode = !!adminUser;
   Storage.save(STATE);
@@ -1134,12 +1328,17 @@ function openCourseEditor(courseId) {
   const c = courseId ? getCourse(courseId) : null;
   const modal = document.getElementById("modal");
   modal.innerHTML = `
-    <div class="modal-card">
+    <div class="modal-card modal-card-wide">
       <h2>${c ? "Редактировать курс" : "Новый курс"}</h2>
       <label>Название<input id="f-title" value="${c ? escapeHtml(c.title) : ""}"></label>
       <label>Подзаголовок<input id="f-sub" value="${c ? escapeHtml(c.subtitle || "") : ""}"></label>
       <label>Иконка (эмодзи)<input id="f-icon" value="${c ? c.icon : "📘"}"></label>
       <label>Цвет акцента<input id="f-color" type="color" value="${c ? c.color : "#419235"}"></label>
+      <div class="pos-block">
+        <div class="pos-block-title">Доступно должностям</div>
+        <p class="hint" style="text-align:left;margin:4px 0 8px">Если ничего не отмечено — курс видят все. Иначе только выбранные должности.</p>
+        <div class="pos-checks">${positionsCheckboxesHtml(c ? (c.positionIds || []) : [], "f-course-pos")}</div>
+      </div>
       <div class="modal-actions">
         ${c ? `<button class="btn-ghost" style="color:var(--danger)" data-del-course="${c.id}">Удалить курс</button>` : ""}
         <button class="btn-primary" data-save-course="${c ? c.id : ""}">Сохранить</button>

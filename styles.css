@@ -592,3 +592,65 @@ h1, h2, .display {
 .lesson-body font[size="4"] { font-size: 1.15em; }
 .lesson-body font[size="5"] { font-size: 1.35em; }
 .lesson-body font[size="6"] { font-size: 1.55em; }
+
+
+/* Выравнивание по ширине */
+.lesson-body [style*="text-align: justify"],
+.lesson-body [align="justify"],
+.rte-area [style*="text-align: justify"] {
+  text-align: justify;
+}
+
+/* Анимации контента (при просмотре и в редакторе) */
+@keyframes animFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes animSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes animZoomIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes animPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+.anim-fade {
+  animation: animFadeIn 0.7s ease both;
+}
+.anim-slide {
+  animation: animSlideIn 0.7s ease both;
+}
+.anim-zoom {
+  animation: animZoomIn 0.6s ease both;
+}
+.anim-pulse {
+  animation: animPulse 1.4s ease-in-out infinite;
+}
+
+/* Появление блоков урока по очереди */
+.lesson-body.anim-enter > * {
+  animation: animSlideIn 0.5s ease both;
+}
+.lesson-body.anim-enter > *:nth-child(1) { animation-delay: 0.05s; }
+.lesson-body.anim-enter > *:nth-child(2) { animation-delay: 0.12s; }
+.lesson-body.anim-enter > *:nth-child(3) { animation-delay: 0.19s; }
+.lesson-body.anim-enter > *:nth-child(4) { animation-delay: 0.26s; }
+.lesson-body.anim-enter > *:nth-child(5) { animation-delay: 0.33s; }
+.lesson-body.anim-enter > *:nth-child(6) { animation-delay: 0.40s; }
+.lesson-body.anim-enter > *:nth-child(7) { animation-delay: 0.47s; }
+.lesson-body.anim-enter > *:nth-child(8) { animation-delay: 0.54s; }
+.lesson-body.anim-enter > *:nth-child(n+9) { animation-delay: 0.6s; }
+
+/* Должности */
+.pos-block { margin: 12px 0; text-align: left; }
+.pos-block-title { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+.pos-checks { display: flex; flex-direction: column; gap: 6px; }
+.pos-check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer; }
+.pos-check input { width: auto; margin: 0; }
+.pos-admin-list { margin-bottom: 10px; }
+.pos-admin-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
