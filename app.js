@@ -80,11 +80,11 @@ function positionTitle(id) {
 /** Курсы, доступные текущему пользователю. Админ видит все. */
 function visibleCourses() {
   if (STATE.editMode) return STATE.courses;
-  const pid = STATE.userPositionId;
+  const pid = STATE.userPositionId != null ? String(STATE.userPositionId) : "";
   return STATE.courses.filter(c => {
-    const ids = c.positionIds;
-    if (!ids || !ids.length) return true; // пустой список = доступно всем
-    if (!pid) return false; // нет должности — только «общие» курсы уже отфильтрованы выше
+    const ids = (c.positionIds || []).map(String).filter(Boolean);
+    if (!ids.length) return true; // пустой список = доступно всем
+    if (!pid) return false;
     return ids.includes(pid);
   });
 }
@@ -92,9 +92,26 @@ function canAccessCourse(courseId) {
   if (STATE.editMode) return true;
   const c = getCourse(courseId);
   if (!c) return false;
-  const ids = c.positionIds;
-  if (!ids || !ids.length) return true;
-  return !!(STATE.userPositionId && ids.includes(STATE.userPositionId));
+  const ids = (c.positionIds || []).map(String).filter(Boolean);
+  if (!ids.length) return true;
+  const pid = STATE.userPositionId != null ? String(STATE.userPositionId) : "";
+  return !!(pid && ids.includes(pid));
+}
+function itemVisibleByPosition(positionIds) {
+  if (STATE.editMode) return true;
+  const ids = (positionIds || []).map(String).filter(Boolean);
+  if (!ids.length) return true;
+  const pid = STATE.userPositionId != null ? String(STATE.userPositionId) : "";
+  return !!(pid && ids.includes(pid));
+}
+function visiblePortal() {
+  if (STATE.editMode) return STATE.portal || [];
+  return (STATE.portal || []).filter(a => itemVisibleByPosition(a.positionIds));
+}
+function canAccessArticle(articleId) {
+  const a = (STATE.portal || []).find(x => x.id === articleId);
+  if (!a) return false;
+  return itemVisibleByPosition(a.positionIds);
 }
 function positionsCheckboxesHtml(selectedIds, nameAttr) {
   const list = STATE.positions || [];
@@ -848,8 +865,9 @@ function renderQuiz(courseId, moduleId) {
 
 // ===== SCREENS: информационный портал =====
 function renderPortalList() {
+  const list = visiblePortal();
   const cats = {};
-  STATE.portal.forEach(a => { (cats[a.category] = cats[a.category] || []).push(a); });
+  list.forEach(a => { (cats[a.category] = cats[a.category] || []).push(a); });
   const blocks = Object.keys(cats).map(cat => `
     <h2 class="section-title">${escapeHtml(cat)}</h2>
     <div class="course-list">
@@ -870,14 +888,19 @@ function renderPortalList() {
       ${STATE.editMode ? `<button class="btn-ghost" data-add-article>+ Материал</button>` : ""}
     </div>
     <p class="hint" style="text-align:left;margin-bottom:6px;">Справочные материалы, чек-листы и регламенты — не курсы, а быстрый поиск нужной информации.</p>
-    ${STATE.portal.length ? `<button class="btn-ghost" data-export-portal style="margin-bottom:14px;">⬇️ Скачать весь портал в Word</button>` : ""}
-    ${blocks || `<p class="hint">Материалов пока нет.</p>`}
+    ${list.length ? `<button class="btn-ghost" data-export-portal style="margin-bottom:14px;">⬇️ Скачать весь портал в Word</button>` : ""}
+    ${blocks || `<p class="hint">${(STATE.portal || []).length ? "Нет материалов, доступных вашей должности." : "Материалов пока нет."}</p>`}
+    ${STATE.userPositionId && !STATE.editMode ? `<p class="hint" style="margin-top:10px">Должность: ${escapeHtml(positionTitle(STATE.userPositionId) || "—")}</p>` : ""}
   `;
 }
 
 function renderArticle(articleId) {
   const a = STATE.portal.find(x => x.id === articleId);
   if (!a) return renderPortalList();
+  if (!canAccessArticle(articleId)) {
+    toast("Этот материал недоступен для вашей должности", "warn");
+    return renderPortalList();
+  }
   return `
     <div class="screen-header">
       <button class="back-btn" data-back-portal>‹</button>
@@ -1010,6 +1033,9 @@ async function loadAndRenderAdmin() {
       STATE.positions = (STATE.positions || []).filter(p => p.id !== id);
       STATE.courses.forEach(c => {
         if (c.positionIds) c.positionIds = c.positionIds.filter(x => x !== id);
+      });
+      (STATE.portal || []).forEach(a => {
+        if (a.positionIds) a.positionIds = a.positionIds.filter(x => x !== id);
       });
       persistContent();
       loadAndRenderAdmin();
@@ -1348,14 +1374,26 @@ function openCourseEditor(courseId) {
   modal.querySelector("[data-save-course]").addEventListener("click", () => {
     const title = document.getElementById("f-title").value.trim();
     if (!title) { toast("Укажите название", "warn"); return; }
+    const positionIds = readCheckedPositions("f-course-pos");
     if (c) {
       c.title = title; c.subtitle = document.getElementById("f-sub").value.trim();
       c.icon = document.getElementById("f-icon").value.trim() || "📘";
       c.color = document.getElementById("f-color").value;
+      c.positionIds = positionIds;
     } else {
-      STATE.courses.push({ id: "c" + Date.now(), title, subtitle: document.getElementById("f-sub").value.trim(), icon: document.getElementById("f-icon").value.trim() || "📘", color: document.getElementById("f-color").value, modules: [] });
+      STATE.courses.push({
+        id: "c" + Date.now(),
+        title,
+        subtitle: document.getElementById("f-sub").value.trim(),
+        icon: document.getElementById("f-icon").value.trim() || "📘",
+        color: document.getElementById("f-color").value,
+        modules: [],
+        positionIds
+      });
     }
-    persistContent(); closeModal(); render();
+    persistContent();
+    toast(positionIds.length ? ("Доступ: " + positionIds.length + " должн.") : "Курс доступен всем", "badge");
+    closeModal(); render();
   });
   const delBtn = modal.querySelector("[data-del-course]");
   if (delBtn) delBtn.addEventListener("click", () => {
@@ -1469,6 +1507,11 @@ function openArticleEditor(articleId) {
       <label>Название<input id="f-atitle" value="${a ? escapeHtml(a.title) : ""}"></label>
       <label>Иконка (эмодзи)<input id="f-aicon" value="${a ? a.icon : "📄"}"></label>
       <label>Краткое описание<input id="f-asummary" value="${a ? escapeHtml(a.summary || "") : ""}"></label>
+      <div class="pos-block">
+        <div class="pos-block-title">Доступно должностям</div>
+        <p class="hint" style="text-align:left;margin:4px 0 8px">Если ничего не отмечено — материал видят все. Иначе только выбранные должности.</p>
+        <div class="pos-checks">${positionsCheckboxesHtml(a ? (a.positionIds || []) : [], "f-article-pos")}</div>
+      </div>
       <div style="font-size:13px;color:var(--text-dim);margin:8px 0 4px;">Текст материала</div>
       ${richEditorHtml("f-abody", a ? a.body : "")}
       ${renderFilesEditor(filesRef.files, "f-art-files")}
@@ -1485,6 +1528,7 @@ function openArticleEditor(articleId) {
   modal.querySelector("[data-save-article]").addEventListener("click", () => {
     const title = document.getElementById("f-atitle").value.trim();
     if (!title) { toast("Укажите название", "warn"); return; }
+    const positionIds = readCheckedPositions("f-article-pos");
     const data = {
       id: a ? a.id : "art" + Date.now(),
       category: document.getElementById("f-cat").value.trim() || "Общее",
@@ -1492,7 +1536,8 @@ function openArticleEditor(articleId) {
       icon: document.getElementById("f-aicon").value.trim() || "📄",
       summary: document.getElementById("f-asummary").value.trim(),
       body: getRichEditorHtml("f-abody"),
-      files: filesRef.files || []
+      files: filesRef.files || [],
+      positionIds
     };
     if (a) {
       const idx = STATE.portal.findIndex(x => x.id === a.id);
@@ -1500,7 +1545,9 @@ function openArticleEditor(articleId) {
     } else {
       STATE.portal.push(data);
     }
-    persistContent(); closeModal(); render();
+    persistContent();
+    toast(positionIds.length ? ("Доступ: " + positionIds.length + " должн.") : "Материал доступен всем", "badge");
+    closeModal(); render();
   });
   const delBtn = modal.querySelector("[data-del-article]");
   if (delBtn) delBtn.addEventListener("click", () => {
